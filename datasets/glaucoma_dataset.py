@@ -4,15 +4,17 @@ import torch
 from datasets.helper_func import read_dataset
 from datasets.preprocessor import Preprocessor
 
-
+MASK_PATHS = {"origa": "/storage/shreya/datasets/origa/",
+              "drishti":"/storage/shreya/datasets/drishti/Disc_Cup_Masks/",
+              "refuge": "/storage/shreya/datasets/refuge/cropped/Disc_Cup_Masks/"}
 class make_dataset:
     NUM_CLASSES = 2
-    def __init__(self, args, split='train'):
+    def __init__(self, args, split='train', datatset):
         super(make_dataset, self).__init__()
-        split_path = {'train':'Origa_shuffled_train_images.txt' , 'test':'Origa_shuffled_test_images.txt'}
-        self.source[0] = read_dataset(split_path[split],args.source1_dataset )
-        self.source[1] = read_dataset(split_path[split], args.source2_dataset)
-        self.target =  read_dataset(split_path[split], args.target_dataset)
+        split_path = {'train': 'train_shuffled_data.txt', 'test': 'test_shuffled_data.txt', 'combined': 'all_shuffled_data.txt'}
+        self.source[0] = read_dataset(split_path[split],args.source1_dataset,MASK_PATHS[datatset[0]], datatset[0])
+        self.source[1] = read_dataset(split_path[split], args.source2_dataset,MASK_PATHS[datatset[1]], dataset[1])
+        self.target =  read_dataset(split_path['combined'], args.target_dataset, MASK_PATHS[datatset[2]], dataset[2])
         self.split = split
         self.multi_source_type = 'single'
         self.num_sources = 1

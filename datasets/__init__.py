@@ -2,6 +2,9 @@ from datasets.glaucoma_dataset import make_dataset
 from torch.utils.data import DataLoader
 import numpy as np
 
+# split_path = {"origa": ['Origa_shuffled_train_images.txt' , 'Origa_shuffled_test_images.txt'],
+#               "refuge": ['Refuge_shuffled_train_images.txt', 'Refuge_shuffled_test_images.txt'],
+#               "drishti": ['Refuge_shuffled_val_images.txt', 'Refuge_shuffled_val_images.txt']}
 def _init_fn(worker_id):
     np.random.seed(int(1+worker_id))
 
@@ -30,6 +33,8 @@ def make_data_loader(args, **kwargs):
         test_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory= False, drop_last=True)
         print(len(train_loader), len(val_loader), len(test_loader))
         return train_loader, val_loader, test_loader, num_class
-
+    elif args.dataset == ['refuge', 'origa', 'drishti']:
+        train_set = make_dataset(args, split='train', [ROOT_PATHS[args.dataset[0],
+                                                        ROOT_PATHS[args.dataset[1]]])
     else:
         raise NotImplementedError
