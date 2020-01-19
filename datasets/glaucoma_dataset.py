@@ -9,20 +9,24 @@ MASK_PATHS = {"origa": "/storage/shreya/datasets/origa/",
               "refuge": "/storage/shreya/datasets/refuge/cropped/Disc_Cup_Masks/"}
 class make_dataset:
     NUM_CLASSES = 2
-    def __init__(self, args, split='train', datatset):
+    def __init__(self, args, split='train', datatset, multi_source_type):
         super(make_dataset, self).__init__()
         split_path = {'train': 'train_shuffled_data.txt', 'test': 'test_shuffled_data.txt', 'combined': 'all_shuffled_data.txt'}
-        self.source[0] = read_dataset(split_path[split],args.source1_dataset,MASK_PATHS[datatset[0]], datatset[0])
-        self.source[1] = read_dataset(split_path[split], args.source2_dataset,MASK_PATHS[datatset[1]], dataset[1])
+        if split == 'train':
+            self.source[0] = read_dataset(split_path[split],args.source1_dataset,MASK_PATHS[datatset[0]], datatset[0])
+            self.source[1] = read_dataset(split_path[split], args.source2_dataset,MASK_PATHS[datatset[1]], dataset[1])
+            self.min_len_source_dataset = min([len(self.source[0]), len(self.source[1])])
+            self.min_source_index = 0 if len(self.source[0]) < len(self.source[1]) else 1
         self.target =  read_dataset(split_path['combined'], args.target_dataset, MASK_PATHS[datatset[2]], dataset[2])
         self.split = split
-        self.multi_source_type = 'single'
-        self.num_sources = 1
-        self.min_len_source_dataset = min([len(self.source[0]), len(self.source[1])])
-        self.min_source_index = 0 if len(self.source[0]) < len(self.source[1]) else 1
+        self.multi_source_type = multi_source_type
         self.preprocessor = Preprocessor(prep_method=['transform_image'], resize= 600, crop=(530,530), options={'norm':[[0.485, 0.456, 0.406], [0.229, 0.224, 0.225]]})
 
     def __getitem__(self, index):
+        if self.split == 'test' and self.multi_source_type == 'twosource':
+            target_mask = self.preprocessor.preprocess_image(self.target[index][1], 'mask')
+            target_image = self.preprocessor.preprocess_image(self.target[index][0], 'image')
+            return image, mask
         if self.multi_source_type == 'pretrain':
             mask = self.preprocessor.preprocess_image(self.source1[index][1], 'mask')
             image = self.preprocessor.preprocess_image(self.source1[index][0], 'image')
@@ -47,9 +51,7 @@ class make_dataset:
                     break
                 source_image.vstack(self.preprocessor.preprocess_image(self.source[sour][index][0], 'image'))
                 source_mask.vstack(self.preprocessor.preprocess_image(self.source[sour][index][1], 'mask'))
-            targ_mask = self.preprocessor.preprocess_image(self.target[index][1], 'mask')
-            targ_image = self.preprocessor.preprocess_image(self.target[index][0], 'image')
-            return sour_image, sour_mask, targ_image, targ_mask
+            return source_image, source_mask
 
     def __len__(self):
         if self.multi_source_type == 'single':

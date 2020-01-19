@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from datasets import make_data_loader
 from utils.metrics import compute_iou
 from utils.test_sanity import sanity_check,sanity_check_2
-from trainer.trainer_multisource import multisource_trainer
+from trainer.trainer_multisource import madan_trainer
 
 import torch
 class multi_source:
@@ -19,8 +19,8 @@ class multi_source:
         self.tbar = tqdm(self.test_loader, desc='\r')
         self.best_IoU = {'disc': 0.77, 'cup': 0.65}
         self.attempt = 9.5
-        self.multisource_trainer = multisource_trainer(args, self.num_class)
-        self.trainer_multisource(args)
+        self.madan_trainer = madan_trainer(args, self.num_class)
+        self.trainer_madan(args)
 
     def loop_iterable(self, iterable):
         while True:
@@ -28,30 +28,46 @@ class multi_source:
 
     def save_model(self, epoch, IoU):
         print('---- MODEL SAVE ---')
-        torch.save({'epoch': epoch + 1, 'state_dict': self.multisource_trainer.target_model.state_dict(), 'best_auc': str(self.best_IoU['cup']),
-                    'optimizer' : self.multisource_trainer.dda_optim.state_dict()}, 'best_origa/m-adda_wgan_clip_0.03' + "v_" + str(self.attempt) + '.pth.tar')
+        torch.save({'epoch': epoch + 1, 'state_dict': self.madan_trainer.target_model.state_dict(), 'best_auc': str(self.best_IoU['cup']),
+                    'optimizer' : self.madan_trainer.dda_optim.state_dict()}, 'best_origa/m-adda_wgan_clip_0.03' + "v_" + str(self.attempt) + '.pth.tar')
         return
 
-    def trainer_multisource(self, args):
+    def trainer_madan(self, args):
         print("trainer initialized training started")
         for epoch in range(args.epochs):
             self.validation(epoch)
-            self.multisource_trainer.generator_model.train()
+            self.madan_trainer.generator_model.train()
+            self.madan_trainer.discriminator_model.train()
             total_loss = 0
-            len_dataloader = len(self.source_loader)
+            batch_iterator = zip(self.loop_iterable(self.source_loader), self.loop_iterable(self.target_loader))
             torch.manual_seed(1 + epoch)
-            for step, source_data in enumerate(self.source_loader):
-                image = source_data[0].cuda()
-                mask  = source_data[1].cuda()
-                batch_loss,_ = self.multisource_trainer.update_weights(image, mask)
-                total_loss+=batch_loss.detach().cpu().numpy()
+            len_dataloader = max(len(self.source_loader), len(self.target_loader))
+            for step in trange(len_dataloader, leave=True):
+                try:
+                    data = next(batch_iterator)
+                except StopIteration:
+                    batch_iterator = zip(self.loop_iterable(self.source_loader), self.loop_iterable(self.target_loader))
+                    data = next(batch_iterator)
+                if epoch < 0:
+                    source_x, src_labels = data[0][:,0].cuda(), data[0][:,1].cuda()
+                    target_x, target_lab = data[1][:,0].cuda(),  data[1][:,1].cuda()
+                    dda_loss, tgt_loss = self.madan_trainer.update_weights(source_x, src_labels, target_x, target_lab, 0, 0, 'train_gen')
+                    continue
+                for i in range(args.k_disc):
+                    source_x, src_labels = data[0][:,0].cuda(), data[0][:,1].cuda()
+                    target_x, target_lab = data[1][:,0].cuda(),  data[1][:,1].cuda()
+                    dda_loss, tgt_loss,regu_val_disc = self.madan_trainer.update_weights(source_x, src_labels, target_x, target_lab, 0.2, 0.05, 'train_disc') #0.2, 0.01
+                for i in range(args.k_src):
+                    source_x, src_labels = data[0][:,0].cuda(), data[0][:,1].cuda()
+                    target_x, target_lab = data[1][:,0].cuda(),  data[1][:,1].cuda()
+                    dda_loss, tgt_loss = self.madan_trainer.update_weights(source_x, src_labels, target_x, target_lab, 0.2, 0.05, 'train_gen') #0.2 , 0.01
                 if step %50 ==0:
                     print('batch wise loss {} at batch {}'.format(total_loss/(step+1), step+1))
             print("total epoch loss {}".format(total_loss/(step+1)))
         return
 
     def validation(self, epoch):
-        self.multisource_trainer.generator_model.eval()
+        self.madan_trainer.generator_model.eval()
         test_loss = 0.0
         predict_disc =None
         target_disc = None
@@ -61,8 +77,8 @@ class multi_source:
             image, target = data[0], data[1]
             image, target = image.cuda(), target.cuda()
             with torch.no_grad():
-                output,_ = self.multisource_trainer.generator_model(image)
-            test_loss = self.multisource_trainer.generator_criterion(output, target)
+                output,_ = self.madan_trainer.generator_model(image)
+            test_loss = self.madan_trainer.generator_criterion(output, target)
             pred = output.data.cpu().numpy()
             target = target.cpu().numpy()
             pred[pred >= 0.5] = 1
