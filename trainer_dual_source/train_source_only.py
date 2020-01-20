@@ -20,7 +20,7 @@ class multi_source:
         self.source_loader, self.target_loader, self.test_loader, self.nclass = make_data_loader(args, **kwargs)
         self.tbar = tqdm(self.test_loader, desc='\r')
         self.best_IoU = {'disc': 0.77, 'cup': 0.60}
-        self.attempt = 9.5
+        self.attempt = 9.8
         self.multisource_trainer = multisource_trainer(args, self.num_class)
         self.trainer_multisource(args)
 
@@ -82,8 +82,8 @@ class multi_source:
         #evaluator.Plot_Loss(1)
         print('Validation on total  set of size {}'.format(len(target_disc)))
         #print('[Epoch: %d, numImages: %5d]' % (epoch, i * args.batch_size + image.data.shape[0]))
-        #if epoch == 1:
-        #   sanity_check_2(image.detach().cpu().numpy(), target_disc, predict_disc)
+        # if epoch == 0:
+        #    sanity_check_2(image.detach().cpu().numpy(), target_cup, predict_cup)
         iou_cup = compute_iou(target_cup, predict_cup)
         iou_disc = compute_iou(target_disc, predict_disc)
         print("for Epoch {} iou disc:{} and iou_cup:{}".format(epoch , iou_disc, iou_cup))
@@ -101,14 +101,14 @@ def main():
     parser.add_argument('--backbone', type=str, default='resnet',
                         choices=['resnet', 'xception', 'drn', 'mobilenet'],
                         help='backbone name (default: resnet)')
-    parser.add_argument('--dataset', type=str, default=['origa', 'refuge', 'all'],
+    parser.add_argument('--dataset', type=str, default=['origa', 'refuge', 'drishti'],
                         choices=['origa', 'drishti', 'refuge'],
                         help='dataset name (default: pascal)')
     parser.add_argument('--source1_dataset', type=str, default='/storage/shreya/datasets/origa/split_ORIGA/',
                         help='dataset name (default: pascal)')
     parser.add_argument('--source2_dataset', type=str, default='/storage/shreya/datasets/refuge/split_refuge/',
                         help='dataset name (default: pascal)')
-    parser.add_argument('--target_dataset', type=str, default='/storage/shreya/datasets/origa/split_ORIGA/',
+    parser.add_argument('--target_dataset', type=str, default='/storage/shreya/datasets/drishti/split_drishti/',
                         help='dataset name (default: pascal)')
 
     parser.add_argument('--lr', type=float, default=None, metavar='LR',
@@ -150,7 +150,7 @@ def main():
     parser.add_argument('--k_targ', type=int, default=1,
                         help='skip validation during training')
     # checking point
-    parser.add_argument('--resume', type=str, default= 'pretrained/deeplab-resnet.pth.tar',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
+    parser.add_argument('--resume', type=str, default='pretrained/deeplab-resnet.pth.tar', #'best_origa/m-adda_wgan_clip_0.03v_9.5.pth.tar' #'pretrained/deeplab-resnet.pth.tar',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
                         help='put the path to resuming file if needed')
     parser.add_argument('--save_model', type=bool, default= 'False',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
                         help='put the path to resuming file if needed')

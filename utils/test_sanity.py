@@ -22,6 +22,8 @@ def sanity_check(image, target, prediction):
 def sanity_check_2(image, target, prediction):
     target_disc = target[3,:,:]
     prediction_disc = prediction[3,:,:]
+    import pdb
+    pdb.set_trace()
     target_disc[target_disc==1] = 128
     prediction_disc[prediction_disc==1] = 128
     cv2.imwrite('target_disc.png', np.uint8(target_disc))

@@ -33,7 +33,7 @@ def make_data_loader(args, **kwargs):
         test_loader = DataLoader(val_set, batch_size=args.batch_size*2, shuffle=False, num_workers=0, pin_memory= False, drop_last=True)
         print(len(train_loader), len(val_loader), len(test_loader))
         return train_loader, val_loader, test_loader, num_class
-    elif args.dataset == ['origa', 'refuge', 'all']:
+    elif args.dataset == ['origa', 'refuge', 'drishti']:
         train_set = make_dataset(args, split='train', dataset=[args.dataset[0],
                                                         args.dataset[1],args.dataset[2]], multi_source_type='twosource')
         val_set = make_dataset(args, split='test', dataset= [args.dataset[0],

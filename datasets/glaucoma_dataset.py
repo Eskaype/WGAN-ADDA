@@ -29,6 +29,7 @@ class make_dataset:
             self.target.append(read_dataset(split_path['test'], args.target_dataset, MASK_PATHS[dataset[1]], dataset[1]))
         else:
             self.target =  read_dataset(split_path['combined'], args.target_dataset, MASK_PATHS[dataset[-1]], dataset[-1])
+            print("dataset split {} {} {}".format(args.target_dataset,  MASK_PATHS[dataset[-1]],  dataset[-1]))
         self.split = split
         self.multi_source_type = multi_source_type
         self.preprocessor = Preprocessor(prep_method=['transform_image'], resize= 450, crop=(400,400), options={'norm':[[0.485, 0.456, 0.406], [0.229, 0.224, 0.225]]})
@@ -37,6 +38,7 @@ class make_dataset:
         if self.split == 'test' and (self.multi_source_type == 'twosource' or self.multi_source_type == 'single'):
             target_mask = self.preprocessor.preprocess_image(self.target[index][1], 'mask', self.dataset[-1])
             target_image = self.preprocessor.preprocess_image(self.target[index][0], 'image', self.dataset[-1])
+            print(self.target[index][1])
             return target_image, target_mask
         if self.multi_source_type == 'pretrain':
             mask = self.preprocessor.preprocess_image(self.source1[index][1], 'mask')
