@@ -5,9 +5,9 @@ import numpy as np
 from datasets.helper_func import read_dataset
 from datasets.preprocessor import Preprocessor
 
-MASK_PATHS = {"origa": "/storage/shreya/datasets/origa/",
-              "drishti":"/storage/shreya/datasets/drishti/Disc_Cup_Masks/",
-              "refuge": "/storage/shreya/datasets/refuge/cropped/Disc_Cup_Masks/"}
+MASK_PATHS = {"origa": "/storage/zwang/datasets/origa/",
+              "drishti":"/storage/zwang/datasets/drishti/Disc_Cup_Masks/",
+              "refuge": "/storage/zwang/datasets/refuge/cropped/Disc_Cup_Masks/"}
 class make_dataset:
     NUM_CLASSES = 2
     def __init__(self, args, split, dataset, multi_source_type):
@@ -46,7 +46,7 @@ class make_dataset:
             source_image = None
             source_mask = None
             index_other = index
-            if index > self.min_len_source_dataset:
+            if index > self.min_len_source_dataset-1:
                 index_other = index % self.min_len_source_dataset
             # To-do change this : slighltly complicated logic to order the sources in the increasing order of their lengths
             for ind, sour in enumerate([self.min_source_index, abs(self.min_source_index%1)]):

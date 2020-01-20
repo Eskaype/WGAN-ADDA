@@ -38,14 +38,12 @@ class multi_source:
     def trainer_madan(self, args):
         print("trainer initialized training started")
         for epoch in range(args.epochs):
-            self.validation(epoch)
+            self.validation(args, epoch)
             self.madan_trainer.generator_model.train()
             self.madan_trainer.discriminator_model.train()
             total_loss = 0
             batch_iterator_source = enumerate(self.source_loader)
             batch_iterator_target = enumerate(self.target_loader)
-            import pdb
-            pdb.set_trace()
             torch.manual_seed(1 + epoch)
             len_dataloader = max(len(self.source_loader), len(self.target_loader))
             options = {'gamma': 0.5 , 'mu': 1e-2, 'mode': 'maxmin'}
@@ -65,7 +63,7 @@ class multi_source:
             print("total epoch loss {}".format(total_loss/(step+1)))
         return
 
-    def validation(self, epoch):
+    def validation(self, args, epoch):
         self.madan_trainer.generator_model.eval()
         test_loss = 0.0
         predict_disc =None
@@ -117,11 +115,11 @@ def main():
     parser.add_argument('--dataset', type=list, default=['origa', 'refuge', 'drishti'],
                         choices=['refuge', 'origa', 'dristhi'],
                         help='dataset name (default: pascal)')
-    parser.add_argument('--source1_dataset', type=str, default='/storage/shreya/datasets/origa/split_ORIGA/',
+    parser.add_argument('--source1_dataset', type=str, default='/storage/zwang/datasets/origa/split_ORIGA/',
                         help='dataset name (default: pascal)')
-    parser.add_argument('--source2_dataset', type=str, default='/storage/shreya/datasets/refuge/split_refuge/',
+    parser.add_argument('--source2_dataset', type=str, default='/storage/zwang/datasets/refuge/split_refuge/',
                         help='dataset name (default: pascal)')
-    parser.add_argument('--target_dataset', type=str, default='/storage/shreya/datasets/drishti/split_drishti/',
+    parser.add_argument('--target_dataset', type=str, default='/storage/zwang/datasets/drishti/split_drishti/',
                         help='dataset name (default: pascal)')
 
     parser.add_argument('--lr', type=float, default=None, metavar='LR',

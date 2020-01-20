@@ -54,7 +54,8 @@ class FCDiscriminator(nn.Module):
 
 
 	def forward(self, x): #, alpha):
-		#x = ReverseLayerF.apply(x, alpha)
+		alpha=0.9
+		x = ReverseLayerF.apply(x, alpha)
 		x = self.conv1(x)
 		x = self.bn1(x)
 		x = self.leaky_relu(x)
