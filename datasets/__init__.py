@@ -42,8 +42,8 @@ def make_data_loader(args, **kwargs):
                                                         args.dataset[1],args.dataset[2]], multi_source_type='twosource')
         num_class = train_set.NUM_CLASSES
         train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=0, pin_memory= True, worker_init_fn=_init_fn, drop_last=True)
-        val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory= True, drop_last=True, worker_init_fn=_init_fn)
-        test_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory= True, drop_last=True)
+        val_loader = DataLoader(val_set, batch_size=args.batch_size*2, shuffle=False, num_workers=0, pin_memory= True, drop_last=True, worker_init_fn=_init_fn)
+        test_loader = DataLoader(val_set, batch_size=args.batch_size*2, shuffle=False, num_workers=0, pin_memory= True, drop_last=True)
         print(len(train_loader), len(val_loader), len(test_loader))
         return train_loader, val_loader, test_loader, num_class
     else:

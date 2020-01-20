@@ -31,8 +31,6 @@ class DeepLab(nn.Module):
         x, last_x = self.decoder(x, low_level_feat)
         #print(input.size()[2:])
         x = F.interpolate(x, size=input.size()[2:], mode='bilinear', align_corners=True)
-        import pdb
-        #pdb.set_trace()
         last_x = F.interpolate(last_x, size=input.size()[2:], mode='bilinear', align_corners=True)
         return x, last_x
 

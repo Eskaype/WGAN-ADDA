@@ -11,7 +11,7 @@ import pdb
 
 class madan_trainer(object):
     def __init__(self, args, nnclass, ndomains):
-        self.device = 0
+        self.device = 1
         self.generator_model = None
         self.generator_optim = None
         self.generator_criterion = None
@@ -28,9 +28,9 @@ class madan_trainer(object):
                             backbone='resnet',
                             output_stride=16,
                             sync_bn = None,
-                            freeze_bn=False)
+                            freeze_bn=False).cuda()
 
-        self.generator_model = torch.nn.DataParallel(self.generator_model).cuda(self.device)
+        self.generator_model = torch.nn.DataParallel(self.generator_model).cuda()
         patch_replication_callback(self.generator_model)
         if args.resume:
             print('#--------- load pretrained model --------------#')
@@ -45,7 +45,7 @@ class madan_trainer(object):
 
     def init_discriminator(self, args):
         # init D
-        self.discriminator_model = FCDiscriminator(num_classes=2).cuda(self.device)
+        self.discriminator_model = FCDiscriminator(num_classes=2).cuda()
         self.interp = nn.Upsample(size=400, mode='bilinear')
         self.disc_criterion = SegmentationLosses(weight=None, cuda=args.cuda).build_loss(mode=args.loss_type)
         return
@@ -60,22 +60,20 @@ class madan_trainer(object):
 
     def update_weights(self, src_image, src_labels, targ_image, targ_labels,options):
         running_loss = 0.0
-        src_labels = torch.cat([src_labels[:,0].squeeze(), src_labels[:,1].squeeze()])
+        src_labels = torch.cat([src_labels[:,0].squeeze(), src_labels[:,1].squeeze()], 0).type(torch.LongTensor).cuda()
         self.model_optim.zero_grad()
-        # src image shape batch_size x domain x 3 channels x height x width
         pdb.set_trace()
+        # src image shape batch_size x domain x 3 channels x height x width
         src_out, source_feature = self.generator_model(torch.cat([src_image[:,0].squeeze(), src_image[:,1].squeeze()]))
         targ_out, target_feature = self.generator_model(targ_image)
         #  Discriminator
         discriminator_x = torch.cat([source_feature, target_feature]).squeeze()
         disc_clf = self.discriminator_model(discriminator_x)
         # Losses
-        losses = torch.stack([F.nll_loss(src_out[j*self.batch_size:j+self.batch_size], src_labels[j*self.batch_size:j+self.batch_size]) for j in range(self.num_domains)])
-        slabels = torch.ones(self.batch_size, requires_grad=False).type(torch.LongTensor).cuda(self.device)
-        tlabels = torch.zeros(self.batch_size, requires_grad=False).type(torch.LongTensor).cuda(self.device)
-
-        domain_losses = torch.stack([F.nll_loss(disc_clf[j], slabels) +
-                                     F.nll_loss(disc_clf[j], tlabels) for j in range(self.num_domains)])
+        losses = torch.stack([self.generator_criterion(src_out[j*self.batch_size:j+self.batch_size], src_labels[j*self.batch_size:j+self.batch_size]) for j in range(self.num_domains)])
+        slabels = torch.ones(self.batch_size, disc_clf.shape[2], disc_clf.shape[3], requires_grad=False).type(torch.LongTensor).cuda()
+        tlabels = torch.zeros(self.batch_size, disc_clf.shape[2], disc_clf.shape[3], requires_grad=False).type(torch.LongTensor).cuda()
+        domain_losses = torch.stack([self.generator_criterion(disc_clf[j*self.batch_size:j+self.batch_size].squeeze(), slabels) for j in range(self.num_domains)])
         # Different final loss function depending on different training modes.
         if options['mode']== "maxmin":
             loss = torch.max(losses) + options['mu'] * torch.min(domain_losses)
@@ -83,7 +81,9 @@ class madan_trainer(object):
             loss = torch.log(torch.sum(torch.exp(options['gamma'] * (losses + options['mu'] * domain_losses)))) / options['gamma']
         else:
             raise ValueError("No support for the training mode on madnNet: {}.".format(options['mode']))
-        running_loss += loss.item()
         loss.backward()
         self.model_optim.step()
-        return
+        running_loss += loss.detach().cpu().numpy()
+        # compute target loss
+        target_loss = self.generator_criterion(targ_out, targ_labels).detach().cpu().numpy()
+        return running_loss, target_loss

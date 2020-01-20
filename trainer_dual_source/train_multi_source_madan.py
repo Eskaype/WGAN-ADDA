@@ -15,7 +15,7 @@ import torch
 class multi_source:
     def __init__(self, args):
         kwargs = {'num_workers': 4, 'pin_memory': True}
-        self.device = 0
+        self.device = 1
         self.num_class = 2
         self.num_domains = 2
         self.source_loader, self.target_loader, self.test_loader, self.nclass = make_data_loader(args, **kwargs)
@@ -38,15 +38,17 @@ class multi_source:
     def trainer_madan(self, args):
         print("trainer initialized training started")
         for epoch in range(args.epochs):
-            #self.validation(epoch)
+            self.validation(epoch)
             self.madan_trainer.generator_model.train()
             self.madan_trainer.discriminator_model.train()
             total_loss = 0
             batch_iterator_source = enumerate(self.source_loader)
             batch_iterator_target = enumerate(self.target_loader)
+            import pdb
+            pdb.set_trace()
             torch.manual_seed(1 + epoch)
             len_dataloader = max(len(self.source_loader), len(self.target_loader))
-            options = {'gamma': 0.5 , 'mu': 0.5}
+            options = {'gamma': 0.5 , 'mu': 1e-2, 'mode': 'maxmin'}
             for step in trange(len_dataloader, leave=True):
                 try:
                     data_src = next(batch_iterator_source)
@@ -54,14 +56,10 @@ class multi_source:
                 except StopIteration:
                     batch_iterator_target = enumerate(self.target_loader)
                     data_targ = next(batch_iterator_target)
-                if epoch < 0:
-                    source_x, src_labels = data_src[1][:,0,:].cuda(), data_src[1][:,1, :].cuda()
-                    target_x, target_lab = data_targ[1][:,0,:,:].cuda(),  data_targ[1][:,1,:,:].cuda()
-                    dda_loss, tgt_loss = self.madan_trainer.update_weights(source_x, src_labels, target_x, target_lab, options)
-                    continue
-                source_x, src_labels = data_src[1][0].cuda(self.device), data_src[1][1].cuda(self.device)
-                target_x, target_lab = data_targ[1][0].cuda(self.device),  data_targ[1][1].cuda(self.device)
-                dda_loss, tgt_loss,regu_val_disc = self.madan_trainer.update_weights(source_x, src_labels, target_x, target_lab, options) #0.2, 0.01
+                source_x, src_labels = data_src[1][0].cuda(), data_src[1][1].cuda()
+                target_x, target_lab = data_targ[1][0].cuda(),  data_targ[1][1].cuda()
+                source_loss, tgt_loss = self.madan_trainer.update_weights(source_x, src_labels, target_x, target_lab, options) #0.2, 0.01
+                total_loss+= tgt_loss
                 if step %50 ==0:
                     print('batch wise loss {} at batch {}'.format(total_loss/(step+1), step+1))
             print("total epoch loss {}".format(total_loss/(step+1)))
@@ -76,7 +74,7 @@ class multi_source:
         target_cup = None
         for i, data in enumerate(self.tbar):
             image, target = data[0], data[1]
-            image, target = image.cuda(self.device), target.cuda(self.device)
+            image, target = image.cuda(), target.cuda()
             with torch.no_grad():
                 output,_ = self.madan_trainer.generator_model(image)
             test_loss = self.madan_trainer.generator_criterion(output, target)
