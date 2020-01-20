@@ -8,7 +8,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from datasets import make_data_loader
 from utils.metrics import compute_iou
-from utils.test_sanity import sanity_check,sanity_check_2
+from utils.test_sanity import sanity_check, sanity_check_2, check_preprocess_sanity
 from trainer_dual_source.trainer_multi_source_madan import madan_trainer
 import torch
 
@@ -38,7 +38,7 @@ class multi_source:
     def trainer_madan(self, args):
         print("trainer initialized training started")
         for epoch in range(args.epochs):
-            self.validation(args, epoch)
+            # self.validation(args, epoch)
             self.madan_trainer.generator_model.train()
             self.madan_trainer.discriminator_model.train()
             total_loss = 0
@@ -61,6 +61,7 @@ class multi_source:
                 if step %50 ==0:
                     print('batch wise loss {} at batch {}'.format(total_loss/(step+1), step+1))
             print("total epoch loss {}".format(total_loss/(step+1)))
+            self.validation(args, epoch)
         return
 
     def validation(self, args, epoch):
@@ -93,8 +94,6 @@ class multi_source:
         #evaluator.Plot_Loss(1)
         print('Validation on total  set of size {}'.format(len(target_disc)))
         #print('[Epoch: %d, numImages: %5d]' % (epoch, i * args.batch_size + image.data.shape[0]))
-        #if epoch == 1:
-        #   sanity_check_2(image.detach().cpu().numpy(), target_disc, predict_disc)
         iou_cup = compute_iou(target_cup, predict_cup)
         iou_disc = compute_iou(target_disc, predict_disc)
         print("for Epoch {} iou disc:{} and iou_cup:{}".format(epoch , iou_disc, iou_cup))
@@ -102,8 +101,8 @@ class multi_source:
             self.best_IoU['cup'] = iou_cup
             self.best_IoU['disc'] = iou_disc
             print("best iou is {} on epoch {}".format(iou_cup, epoch))
-            if args.save_model == True:
-                save_model(epoch)
+            if False:
+                self.save_model(epoch)
                 print("best model saved at {}")
 
 
@@ -113,7 +112,7 @@ def main():
                         choices=['resnet', 'xception', 'drn', 'mobilenet'],
                         help='backbone name (default: resnet)')
     parser.add_argument('--dataset', type=list, default=['origa', 'refuge', 'drishti'],
-                        choices=['refuge', 'origa', 'dristhi'],
+                        choices=['origa', 'refuge', 'dristhi'],
                         help='dataset name (default: pascal)')
     parser.add_argument('--source1_dataset', type=str, default='/storage/zwang/datasets/origa/split_ORIGA/',
                         help='dataset name (default: pascal)')

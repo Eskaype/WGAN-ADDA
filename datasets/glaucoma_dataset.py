@@ -13,6 +13,7 @@ class make_dataset:
     def __init__(self, args, split, dataset, multi_source_type):
         super(make_dataset, self).__init__()
         split_path = {'train': 'train_shuffled_data.txt', 'test': 'test_shuffled_data.txt', 'combined': 'all_shuffled_data.txt'}
+        self.dataset = dataset
         self.source = {0: None, 1: None}
         if split == 'train':
             self.source[0] = read_dataset(split_path[split],
@@ -29,8 +30,8 @@ class make_dataset:
 
     def __getitem__(self, index):
         if self.split == 'test' and self.multi_source_type == 'twosource':
-            target_mask = self.preprocessor.preprocess_image(self.target[index][1], 'mask')
-            target_image = self.preprocessor.preprocess_image(self.target[index][0], 'image')
+            target_mask = self.preprocessor.preprocess_image(self.target[index][1], 'mask', self.dataset[2])
+            target_image = self.preprocessor.preprocess_image(self.target[index][0], 'image', self.dataset[2])
             return target_image, target_mask
         if self.multi_source_type == 'pretrain':
             mask = self.preprocessor.preprocess_image(self.source1[index][1], 'mask')
@@ -51,11 +52,11 @@ class make_dataset:
             # To-do change this : slighltly complicated logic to order the sources in the increasing order of their lengths
             for ind, sour in enumerate([self.min_source_index, abs(self.min_source_index%1)]):
                 if ind == 0:
-                    source_image = self.preprocessor.preprocess_image(self.source[sour][index_other][0], 'image')
-                    source_mask = self.preprocessor.preprocess_image(self.source[sour][index_other][1], 'mask')
+                    source_image = self.preprocessor.preprocess_image(self.source[sour][index_other][0], 'image', self.dataset[sour])
+                    source_mask = self.preprocessor.preprocess_image(self.source[sour][index_other][1], 'mask', self.dataset[sour])
                     continue
-                source_image = torch.stack((source_image, self.preprocessor.preprocess_image(self.source[sour][index][0], 'image')),0)
-                source_mask = np.stack([source_mask, self.preprocessor.preprocess_image(self.source[sour][index][1], 'mask')], 0)
+                source_image = torch.stack((source_image, self.preprocessor.preprocess_image(self.source[sour][index][0], 'image', self.dataset[sour])),0)
+                source_mask = np.stack([source_mask, self.preprocessor.preprocess_image(self.source[sour][index][1], 'mask', self.dataset[sour])], 0)
             assert source_image.shape[0] == 2
             assert source_mask.shape[0] == 2
             return source_image, source_mask[0]

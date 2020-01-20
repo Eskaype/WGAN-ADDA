@@ -30,11 +30,19 @@ def sanity_check_2(image, target, prediction):
     cv2.imwrite('image.png', image)
     return
 
-def check_preprocess_sanity(target):
+def check_preprocess_sanity(target, save_name):
     target_disc = target[0,:,:]
     target_cup = target[1,:,:]
     proc_img = np.zeros((target_disc.shape[0],target_disc.shape[1]))
     proc_img[target_disc==1]=128
     proc_img[target_cup==1]=255
     assert list(np.unique(proc_img)) == [0.0, 128, 255]
-    return cv2.imwrite('preprocess_mask.png', proc_img)
+    return cv2.imwrite(save_name, proc_img)
+
+def check_postprocess_sanity(predict, target, save_name):
+    target_disc = target[3,:,:]
+    predict_disc = predict[3,:,:]
+    proc_img = np.zeros((target_disc.shape[0],target_disc.shape[1]))
+    proc_img[target_disc==1]=128
+    proc_img[predict_disc==1]=255
+    return cv2.imwrite(save_name, proc_img)

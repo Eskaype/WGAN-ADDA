@@ -53,6 +53,7 @@ class Preprocessor:
         mask_d = np.zeros((org_msk.shape[0], org_msk.shape[1]))
         mask_c = np.zeros((org_msk.shape[0], org_msk.shape[1]))
         mask_d[org_msk==127] = 1 # larger box grey: disc
+        mask_d[org_msk==128] = 1
         mask_d[org_msk==255] = 1 # disc should cover cup
         mask_c[org_msk==255] = 1 # smaller box black: cup
         mskc = cv2.resize(mask_c, (img_w, img_h))
@@ -72,13 +73,16 @@ class Preprocessor:
         msk = np.stack([msk_od, msk_oc], axis=2)
         return msk
 
-    def preprocess_image(self, file_name: str, image_type: 'mask'):
+    def preprocess_image(self, file_name: str, image_type: str, dataset: str):
         """
             self.preprocess_image_methods = ['centre_crop', 'clahe_norm', 'adjust_gamma']
         """
         if image_type == 'mask':
             org_msk = cv2.imread(file_name, 0)
-            org_msk = self.read_image(org_msk)
+            if dataset == 'origa':
+                org_msk = self.read_image(org_msk)
+            #print(list(np.unique(org_msk)))
+            assert list(np.unique(org_msk)) == [0.0, 128.0, 255.0]
             org_msk = cv2.resize(org_msk, (self.resize, self.resize), interpolation =cv2.INTER_NEAREST)
             org_msk = self.center_crop(org_msk, self.crop, 2)
             org_msk = self.msk_to_msk(org_msk)

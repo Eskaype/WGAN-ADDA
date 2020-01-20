@@ -62,7 +62,6 @@ class madan_trainer(object):
         running_loss = 0.0
         src_labels = torch.cat([src_labels[:,0].squeeze(), src_labels[:,1].squeeze()], 0).type(torch.LongTensor).cuda()
         self.model_optim.zero_grad()
-        pdb.set_trace()
         # src image shape batch_size x domain x 3 channels x height x width
         src_out, source_feature = self.generator_model(torch.cat([src_image[:,0].squeeze(), src_image[:,1].squeeze()]))
         targ_out, target_feature = self.generator_model(targ_image)
