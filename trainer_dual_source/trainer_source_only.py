@@ -46,7 +46,8 @@ class multisource_trainer(object):
         self.scheduler = LR_Scheduler(args.lr_scheduler, args.lr, args.epochs, lr_step=30, iters_per_epoch=100)
 
     def update_weights(self, input_, src_labels):
-
+        src_labels = torch.cat([src_labels[:,0].squeeze(), src_labels[:,1].squeeze()], 0).type(torch.LongTensor).cuda()
+        input_ = torch.cat([input_[:,0].squeeze(), input_[:,1].squeeze()])
         src_out, source_feature = self.generator_model(input_)
         seg_loss = self.generator_criterion(src_out, src_labels)
         seg_loss.backward()

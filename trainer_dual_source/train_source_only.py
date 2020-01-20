@@ -1,3 +1,4 @@
+import pdb
 import argparse
 import os
 import numpy as np
@@ -8,16 +9,17 @@ import matplotlib.pyplot as plt
 from datasets import make_data_loader
 from utils.metrics import compute_iou
 from utils.test_sanity import sanity_check,sanity_check_2
-from trainer.trainer_multisource import multisource_trainer
+from trainer_dual_source.trainer_source_only import multisource_trainer
 
 import torch
 class multi_source:
     def __init__(self, args):
         kwargs = {'num_workers': 4, 'pin_memory': True}
         self.num_class = 2
+        self.num_domains = 2
         self.source_loader, self.target_loader, self.test_loader, self.nclass = make_data_loader(args, **kwargs)
         self.tbar = tqdm(self.test_loader, desc='\r')
-        self.best_IoU = {'disc': 0.77, 'cup': 0.65}
+        self.best_IoU = {'disc': 0.77, 'cup': 0.60}
         self.attempt = 9.5
         self.multisource_trainer = multisource_trainer(args, self.num_class)
         self.trainer_multisource(args)
@@ -28,14 +30,14 @@ class multi_source:
 
     def save_model(self, epoch, IoU):
         print('---- MODEL SAVE ---')
-        torch.save({'epoch': epoch + 1, 'state_dict': self.multisource_trainer.target_model.state_dict(), 'best_auc': str(self.best_IoU['cup']),
+        torch.save({'epoch': epoch + 1, 'state_dict': self.multisource_trainer.generator_model.module.state_dict(), 'best_auc': str(self.best_IoU['cup']),
                     'optimizer' : self.multisource_trainer.dda_optim.state_dict()}, 'best_origa/m-adda_wgan_clip_0.03' + "v_" + str(self.attempt) + '.pth.tar')
         return
 
     def trainer_multisource(self, args):
         print("trainer initialized training started")
         for epoch in range(args.epochs):
-            self.validation(epoch)
+            self.validation(args, epoch)
             self.multisource_trainer.generator_model.train()
             total_loss = 0
             len_dataloader = len(self.source_loader)
@@ -50,7 +52,7 @@ class multi_source:
             print("total epoch loss {}".format(total_loss/(step+1)))
         return
 
-    def validation(self, epoch):
+    def validation(self, args, epoch):
         self.multisource_trainer.generator_model.eval()
         test_loss = 0.0
         predict_disc =None
@@ -90,7 +92,7 @@ class multi_source:
             self.best_IoU['disc'] = iou_disc
             print("best iou is {} on epoch {}".format(iou_cup, epoch))
             if args.save_model == True:
-                save_model(epoch)
+                self.save_model(epoch, self.best_IoU['cup'])
                 print("best model saved at {}")
 
 
@@ -99,14 +101,14 @@ def main():
     parser.add_argument('--backbone', type=str, default='resnet',
                         choices=['resnet', 'xception', 'drn', 'mobilenet'],
                         help='backbone name (default: resnet)')
-    parser.add_argument('--dataset', type=str, default='glaucoma',
-                        choices=['pascal', 'coco', 'cityscapes', 'glaucoma'],
+    parser.add_argument('--dataset', type=str, default=['origa', 'refuge', 'all'],
+                        choices=['origa', 'drishti', 'refuge'],
                         help='dataset name (default: pascal)')
-    parser.add_argument('--source1_dataset', type=str, default='/storage/shreya/datasets/glaucoma/split_ORIGA/',
+    parser.add_argument('--source1_dataset', type=str, default='/storage/shreya/datasets/origa/split_ORIGA/',
                         help='dataset name (default: pascal)')
-    parser.add_argument('--source2_dataset', type=str, default='/storage/shreya/datasets/glaucoma/split_ORIGA/',
+    parser.add_argument('--source2_dataset', type=str, default='/storage/shreya/datasets/refuge/split_refuge/',
                         help='dataset name (default: pascal)')
-    parser.add_argument('--target_dataset', type=str, default='/storage/shreya/datasets/glaucoma/split_ORIGA/',
+    parser.add_argument('--target_dataset', type=str, default='/storage/shreya/datasets/origa/split_ORIGA/',
                         help='dataset name (default: pascal)')
 
     parser.add_argument('--lr', type=float, default=None, metavar='LR',
@@ -159,7 +161,7 @@ def main():
             args.gpu_ids = [int(s) for s in args.gpu_ids.split(',')]
         except ValueError:
             raise ValueError('Argument --gpu_ids must be a comma-separated list of integers only')
-    args.batch_size = 4
+    args.batch_size = 2
     if args.lr is None:
         lrs = {
             'coco': 0.1,
@@ -167,7 +169,7 @@ def main():
             'pascal': 0.007,
             'glaucoma': 0.007,
         }
-    args.lr = 1e-4 # 5e-5 best model
+    args.lr = 5e-5 # 5e-5 best model
     torch.manual_seed(1)
     torch.cuda.manual_seed(1)
     np.random.seed(1)
