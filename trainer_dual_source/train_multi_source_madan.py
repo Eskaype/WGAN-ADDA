@@ -1,4 +1,5 @@
 import argparse
+import pdb
 import os
 import numpy as np
 import random
@@ -8,18 +9,20 @@ import matplotlib.pyplot as plt
 from datasets import make_data_loader
 from utils.metrics import compute_iou
 from utils.test_sanity import sanity_check,sanity_check_2
-from trainer.trainer_multisource import madan_trainer
-
+from trainer_dual_source.trainer_multi_source_madan import madan_trainer
 import torch
+
 class multi_source:
     def __init__(self, args):
         kwargs = {'num_workers': 4, 'pin_memory': True}
+        self.device = 0
         self.num_class = 2
+        self.num_domains = 2
         self.source_loader, self.target_loader, self.test_loader, self.nclass = make_data_loader(args, **kwargs)
         self.tbar = tqdm(self.test_loader, desc='\r')
-        self.best_IoU = {'disc': 0.77, 'cup': 0.65}
+        self.best_IoU = {'disc': 0.77, 'cup': 0.65, 'mode': 'maxmin'}
         self.attempt = 9.5
-        self.madan_trainer = madan_trainer(args, self.num_class)
+        self.madan_trainer = madan_trainer(args, self.num_class, self.num_domains)
         self.trainer_madan(args)
 
     def loop_iterable(self, iterable):
@@ -35,32 +38,30 @@ class multi_source:
     def trainer_madan(self, args):
         print("trainer initialized training started")
         for epoch in range(args.epochs):
-            self.validation(epoch)
+            #self.validation(epoch)
             self.madan_trainer.generator_model.train()
             self.madan_trainer.discriminator_model.train()
             total_loss = 0
-            batch_iterator = zip(self.loop_iterable(self.source_loader), self.loop_iterable(self.target_loader))
+            batch_iterator_source = enumerate(self.source_loader)
+            batch_iterator_target = enumerate(self.target_loader)
             torch.manual_seed(1 + epoch)
             len_dataloader = max(len(self.source_loader), len(self.target_loader))
+            options = {'gamma': 0.5 , 'mu': 0.5}
             for step in trange(len_dataloader, leave=True):
                 try:
-                    data = next(batch_iterator)
+                    data_src = next(batch_iterator_source)
+                    data_targ = next(batch_iterator_target)
                 except StopIteration:
-                    batch_iterator = zip(self.loop_iterable(self.source_loader), self.loop_iterable(self.target_loader))
-                    data = next(batch_iterator)
+                    batch_iterator_target = enumerate(self.target_loader)
+                    data_targ = next(batch_iterator_target)
                 if epoch < 0:
-                    source_x, src_labels = data[0][:,0].cuda(), data[0][:,1].cuda()
-                    target_x, target_lab = data[1][:,0].cuda(),  data[1][:,1].cuda()
-                    dda_loss, tgt_loss = self.madan_trainer.update_weights(source_x, src_labels, target_x, target_lab, 0, 0, 'train_gen')
+                    source_x, src_labels = data_src[1][:,0,:].cuda(), data_src[1][:,1, :].cuda()
+                    target_x, target_lab = data_targ[1][:,0,:,:].cuda(),  data_targ[1][:,1,:,:].cuda()
+                    dda_loss, tgt_loss = self.madan_trainer.update_weights(source_x, src_labels, target_x, target_lab, options)
                     continue
-                for i in range(args.k_disc):
-                    source_x, src_labels = data[0][:,0].cuda(), data[0][:,1].cuda()
-                    target_x, target_lab = data[1][:,0].cuda(),  data[1][:,1].cuda()
-                    dda_loss, tgt_loss,regu_val_disc = self.madan_trainer.update_weights(source_x, src_labels, target_x, target_lab, 0.2, 0.05, 'train_disc') #0.2, 0.01
-                for i in range(args.k_src):
-                    source_x, src_labels = data[0][:,0].cuda(), data[0][:,1].cuda()
-                    target_x, target_lab = data[1][:,0].cuda(),  data[1][:,1].cuda()
-                    dda_loss, tgt_loss = self.madan_trainer.update_weights(source_x, src_labels, target_x, target_lab, 0.2, 0.05, 'train_gen') #0.2 , 0.01
+                source_x, src_labels = data_src[1][0].cuda(self.device), data_src[1][1].cuda(self.device)
+                target_x, target_lab = data_targ[1][0].cuda(self.device),  data_targ[1][1].cuda(self.device)
+                dda_loss, tgt_loss,regu_val_disc = self.madan_trainer.update_weights(source_x, src_labels, target_x, target_lab, options) #0.2, 0.01
                 if step %50 ==0:
                     print('batch wise loss {} at batch {}'.format(total_loss/(step+1), step+1))
             print("total epoch loss {}".format(total_loss/(step+1)))
@@ -75,7 +76,7 @@ class multi_source:
         target_cup = None
         for i, data in enumerate(self.tbar):
             image, target = data[0], data[1]
-            image, target = image.cuda(), target.cuda()
+            image, target = image.cuda(self.device), target.cuda(self.device)
             with torch.no_grad():
                 output,_ = self.madan_trainer.generator_model(image)
             test_loss = self.madan_trainer.generator_criterion(output, target)
@@ -115,14 +116,14 @@ def main():
     parser.add_argument('--backbone', type=str, default='resnet',
                         choices=['resnet', 'xception', 'drn', 'mobilenet'],
                         help='backbone name (default: resnet)')
-    parser.add_argument('--dataset', type=list, default=['refuge', 'origa'],
+    parser.add_argument('--dataset', type=list, default=['origa', 'refuge', 'drishti'],
                         choices=['refuge', 'origa', 'dristhi'],
                         help='dataset name (default: pascal)')
-    parser.add_argument('--source1_dataset', type=str, default='/storage/shreya/datasets/glaucoma/split_ORIGA/',
+    parser.add_argument('--source1_dataset', type=str, default='/storage/shreya/datasets/origa/split_ORIGA/',
                         help='dataset name (default: pascal)')
-    parser.add_argument('--source2_dataset', type=str, default='/storage/shreya/datasets/glaucoma/split_refuge/',
+    parser.add_argument('--source2_dataset', type=str, default='/storage/shreya/datasets/refuge/split_refuge/',
                         help='dataset name (default: pascal)')
-    parser.add_argument('--target_dataset', type=str, default='/storage/shreya/datasets/glaucoma/split_drishti/',
+    parser.add_argument('--target_dataset', type=str, default='/storage/shreya/datasets/drishti/split_drishti/',
                         help='dataset name (default: pascal)')
 
     parser.add_argument('--lr', type=float, default=None, metavar='LR',
@@ -175,7 +176,7 @@ def main():
             args.gpu_ids = [int(s) for s in args.gpu_ids.split(',')]
         except ValueError:
             raise ValueError('Argument --gpu_ids must be a comma-separated list of integers only')
-    args.batch_size = 4
+    args.batch_size = 2
     if args.lr is None:
         lrs = {
             'coco': 0.1,

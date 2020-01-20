@@ -1,24 +1,25 @@
 import os
 import cv2
+import pdb
 
 def read_dataset(file_name: str, root: str, maskpath: str, dataset: str):
     file_list = []
     with open(os.path.join(root,file_name)) as f:
         data = f.readlines()
     for line_ in data:
-        file_list.append(os.path.join(line_))
+        file_list.append(os.path.join(line_.split('\n')[0]))
     imgmaskpair = []
     for file_name in file_list:
         if dataset == 'origa':
             mask_name = file_name.split('crop')[0]
             mask_name = mask_name + 'msk_crop.bmp'
         elif dataset == 'drishti':
-            mask_name = file_name.split('/')[-2:]
-            mask_name = os.path.join(maskpath, mask_name.split('.')[0], '.bmp')
+            mask_name = '/'.join(file_name.split('/')[-2:])
+            mask_name = os.path.join(maskpath, mask_name.split('.')[0] + '.bmp')
         else:
-            mask_name = file_name.split('/')[-3:]
-            mask_name = os.path.join(maskpath, mask_name.split('.')[0], '.bmp')
-        imgmaskpair.append([os.path.join(root, file_name.split('\n')[0]),
+            mask_name = '/'.join(file_name.split('/')[-3:])
+            mask_name = os.path.join(maskpath, mask_name.split('.')[0] + '.bmp')
+        imgmaskpair.append([os.path.join(root, file_name),
                             os.path.join(root, mask_name)])
     return imgmaskpair
 

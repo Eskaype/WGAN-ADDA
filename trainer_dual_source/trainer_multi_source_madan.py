@@ -7,14 +7,17 @@ from models.discriminator import FCDiscriminator, FCDiscriminator_WGAN
 import torch
 import os
 from torch import nn
+import pdb
 
 class madan_trainer(object):
-    def __init__(self, args, nnclass):
+    def __init__(self, args, nnclass, ndomains):
+        self.device = 0
         self.generator_model = None
         self.generator_optim = None
         self.generator_criterion = None
         self.batch_size = args.batch_size
         self.nnclass = nnclass
+        self.num_domains = ndomains
         self.init_generator(args)
         self.init_discriminator(args)
         self.init_optimizer(args)
@@ -27,7 +30,7 @@ class madan_trainer(object):
                             sync_bn = None,
                             freeze_bn=False)
 
-        self.generator_model = torch.nn.DataParallel(self.generator_model).cuda()
+        self.generator_model = torch.nn.DataParallel(self.generator_model).cuda(self.device)
         patch_replication_callback(self.generator_model)
         if args.resume:
             print('#--------- load pretrained model --------------#')
@@ -42,7 +45,7 @@ class madan_trainer(object):
 
     def init_discriminator(self, args):
         # init D
-        self.discriminator_model = FCDiscriminator(num_classes=2).cuda()
+        self.discriminator_model = FCDiscriminator(num_classes=2).cuda(self.device)
         self.interp = nn.Upsample(size=400, mode='bilinear')
         self.disc_criterion = SegmentationLosses(weight=None, cuda=args.cuda).build_loss(mode=args.loss_type)
         return
@@ -55,28 +58,31 @@ class madan_trainer(object):
         self.model_optim = torch.optim.Adadelta(self.generator_params+self.discriminator_params)
         self.scheduler = LR_Scheduler(args.lr_scheduler, args.lr, args.epochs, lr_step=30, iters_per_epoch=100)
 
-    def update_weights(self, src_image, src_labels, targ_image, targ_labels, num_domains, options):
-
+    def update_weights(self, src_image, src_labels, targ_image, targ_labels,options):
+        running_loss = 0.0
+        src_labels = torch.cat([src_labels[:,0].squeeze(), src_labels[:,1].squeeze()])
         self.model_optim.zero_grad()
-        src_out, source_feature = self.generator_model(src_image)
+        # src image shape batch_size x domain x 3 channels x height x width
+        pdb.set_trace()
+        src_out, source_feature = self.generator_model(torch.cat([src_image[:,0].squeeze(), src_image[:,1].squeeze()]))
         targ_out, target_feature = self.generator_model(targ_image)
         #  Discriminator
         discriminator_x = torch.cat([source_feature, target_feature]).squeeze()
         disc_clf = self.discriminator_model(discriminator_x)
         # Losses
-        losses = torch.stack([F.nll_loss(src_out[self.batch_size*j:j+self.batch_size], src_labels[self.batch_size*j:j+self.batch_size]) for j in range(num_domains)])
-        slabels = torch.ones(self..batch_size, requires_grad=False).type(torch.LongTensor).to(device)
-        tlabels = torch.zeros(self.batch_size, requires_grad=False).type(torch.LongTensor).to(device)
+        losses = torch.stack([F.nll_loss(src_out[j*self.batch_size:j+self.batch_size], src_labels[j*self.batch_size:j+self.batch_size]) for j in range(self.num_domains)])
+        slabels = torch.ones(self.batch_size, requires_grad=False).type(torch.LongTensor).cuda(self.device)
+        tlabels = torch.zeros(self.batch_size, requires_grad=False).type(torch.LongTensor).cuda(self.device)
 
         domain_losses = torch.stack([F.nll_loss(disc_clf[j], slabels) +
-                                     F.nll_loss(disc_clf[j], tlabels) for j in range(num_domains)])
+                                     F.nll_loss(disc_clf[j], tlabels) for j in range(self.num_domains)])
         # Different final loss function depending on different training modes.
         if options['mode']== "maxmin":
             loss = torch.max(losses) + options['mu'] * torch.min(domain_losses)
         elif options['mode'] == "dynamic":
             loss = torch.log(torch.sum(torch.exp(options['gamma'] * (losses + options['mu'] * domain_losses)))) / options['gamma']
         else:
-            raise ValueError("No support for the training mode on madnNet: {}.".format(mode))
+            raise ValueError("No support for the training mode on madnNet: {}.".format(options['mode']))
         running_loss += loss.item()
         loss.backward()
         self.model_optim.step()
