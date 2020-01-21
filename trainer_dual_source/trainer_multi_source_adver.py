@@ -9,7 +9,7 @@ import os
 from torch import nn
 import pdb
 
-class madan_trainer(object):
+class adversarial_madan_trainer(object):
     def __init__(self, args, nnclass, ndomains, loss_type):
         self.loss_type = loss_type
         self.device = 1
@@ -46,7 +46,7 @@ class madan_trainer(object):
 
     def init_discriminator(self, args):
         # init D
-        self.discriminator_model = FCDiscriminator(num_classes=2).cuda()
+        self.discriminator_model = FCDiscriminator_WGAN(num_classes=2).cuda()
         self.interp = nn.Upsample(size=400, mode='bilinear')
         self.disc_criterion = SegmentationLosses(weight=None, cuda=args.cuda).build_loss(mode=args.loss_type)
         return
@@ -63,7 +63,7 @@ class madan_trainer(object):
     def update_weights_adversarial(self, src_image, src_labels, targ_image, targ_labels, options):
         # Adversarial loss
         self.model_optim.zero_grad()
-        if trainmodel == 'train_gen':
+        if options['trainmodel'] == 'train_gen':
             for param in self.generator_model.parameters():
                 param.requires_grad = True
             for param in self.discriminator_model.parameters():
@@ -93,7 +93,7 @@ class madan_trainer(object):
         realslabels = torch.ones(self.batch_size, disc_clf.shape[2], disc_clf.shape[3], requires_grad=False).type(torch.LongTensor).cuda()
         realtlabels = torch.zeros(self.batch_size*2, disc_clf.shape[2], disc_clf.shape[3], requires_grad=False).type(torch.LongTensor).cuda()
         domain_losses = 0
-        if trainmodel == 'train_gen':
+        if options['trainmodel'] == 'train_gen':
             domain_losses = torch.stack([self.generator_criterion(disc_clf[j*self.batch_size:j+self.batch_size].squeeze(), advslabels) for j in range(self.num_domains)])
             domain_losses = torch.cat([domain_losses, self.generator_criterion(disc_clf[2*self.batch_size:2*self.batch_size+2*self.batch_size].squeeze(), advtlabels)].view(-1)])
             gen_loss = torch.max(losses) + options['mu'] * torch.max(domain_losses)
