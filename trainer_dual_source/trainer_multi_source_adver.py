@@ -10,7 +10,8 @@ from torch import nn
 import pdb
 
 class madan_trainer(object):
-    def __init__(self, args, nnclass, ndomains):
+    def __init__(self, args, nnclass, ndomains, loss_type):
+        self.loss_type = loss_type
         self.device = 1
         self.generator_model = None
         self.generator_optim = None
@@ -58,10 +59,25 @@ class madan_trainer(object):
         self.model_optim = torch.optim.Adadelta(self.generator_params+self.discriminator_params)
         self.scheduler = LR_Scheduler(args.lr_scheduler, args.lr, args.epochs, lr_step=30, iters_per_epoch=100)
 
-    def update_weights(self, src_image, src_labels, targ_image, targ_labels,options):
-        running_loss = 0.0
-        src_labels = torch.cat([src_labels[:,0].squeeze(), src_labels[:,1].squeeze()], 0).type(torch.LongTensor).cuda()
+
+    def update_weights_adversarial(self, src_image, src_labels, targ_image, targ_labels, options):
+        # Adversarial loss
         self.model_optim.zero_grad()
+        if trainmodel == 'train_gen':
+            for param in self.generator_model.parameters():
+                param.requires_grad = True
+            for param in self.discriminator_model.parameters():
+                param.requires_grad = False
+            self.discriminator_model.eval()
+            self.generator_model.train()
+        else:
+            for param in self.generator_model.parameters():
+                param.requires_grad = False
+            for param in self.discriminator_model.parameters():
+                param.requires_grad = True
+            self.discriminator_model.train()
+            self.generator_model.eval()
+        src_labels = torch.cat([src_labels[:,0].squeeze(), src_labels[:,1].squeeze()], 0).type(torch.LongTensor).cuda()
         # src image shape batch_size x domain x 3 channels x height x width
         src_out, source_feature = self.generator_model(torch.cat([src_image[:,0].squeeze(), src_image[:,1].squeeze()]))
         targ_out, target_feature = self.generator_model(targ_image)
@@ -70,20 +86,26 @@ class madan_trainer(object):
         disc_clf = self.discriminator_model(discriminator_x)
         # Losses
         losses = torch.stack([self.generator_criterion(src_out[j*self.batch_size:j+self.batch_size], src_labels[j*self.batch_size:j+self.batch_size]) for j in range(self.num_domains)])
-        slabels = torch.ones(self.batch_size, disc_clf.shape[2], disc_clf.shape[3], requires_grad=False).type(torch.LongTensor).cuda()
-        tlabels = torch.zeros(self.batch_size*2, disc_clf.shape[2], disc_clf.shape[3], requires_grad=False).type(torch.LongTensor).cuda()
-        domain_losses = torch.stack([self.generator_criterion(disc_clf[j*self.batch_size:j+self.batch_size].squeeze(), slabels) for j in range(self.num_domains)])
-        domain_losses = torch.cat([domain_losses, self.generator_criterion(disc_clf[2*self.batch_size:2*self.batch_size+2*self.batch_size].squeeze(), tlabels).view(-1)])
-        # Different final loss function depending on different training modes.
-        if options['mode']== "maxmin":
-            loss = torch.max(losses) + options['mu'] * torch.min(domain_losses)
-        elif options['mode'] == "dynamic":
-            loss = torch.log(torch.sum(torch.exp(options['gamma'] * (losses + options['mu'] * domain_losses)))) / options['gamma']
+        # adversaril labels
+        advslabels = torch.zeros(self.batch_size, disc_clf.shape[2], disc_clf.shape[3], requires_grad=False).type(torch.LongTensor).cuda()
+        advtlabels = torch.ones(self.batch_size*2, disc_clf.shape[2], disc_clf.shape[3], requires_grad=False).type(torch.LongTensor).cuda()
+        # real labels
+        realslabels = torch.ones(self.batch_size, disc_clf.shape[2], disc_clf.shape[3], requires_grad=False).type(torch.LongTensor).cuda()
+        realtlabels = torch.zeros(self.batch_size*2, disc_clf.shape[2], disc_clf.shape[3], requires_grad=False).type(torch.LongTensor).cuda()
+        domain_losses = 0
+        if trainmodel == 'train_gen':
+            domain_losses = torch.stack([self.generator_criterion(disc_clf[j*self.batch_size:j+self.batch_size].squeeze(), advslabels) for j in range(self.num_domains)])
+            domain_losses = torch.cat([domain_losses, self.generator_criterion(disc_clf[2*self.batch_size:2*self.batch_size+2*self.batch_size].squeeze(), advtlabels)].view(-1)])
+            gen_loss = torch.max(losses) + options['mu'] * torch.max(domain_losses)
+            gen_loss.backward()
+            self.model_optim.step()
         else:
-            raise ValueError("No support for the training mode on madnNet: {}.".format(options['mode']))
-        loss.backward()
-        self.model_optim.step()
-        running_loss += loss.detach().cpu().numpy()
+            domain_losses = torch.stack([self.generator_criterion(disc_clf[j*self.batch_size:j+self.batch_size].squeeze(), realslabels) for j in range(self.num_domains)])
+            domain_losses = torch.cat([domain_losses, self.generator_criterion(disc_clf[2*self.batch_size:2*self.batch_size+2*self.batch_size].squeeze(), realtlabels)].view(-1)])
+            disc_loss = options['gamma'] * torch.max(domain_losses)
+            disc_loss.backward()
+            self.model_optim.step()
+        running_loss += disc_loss.detach().cpu().numpy()
         # compute target loss
         target_loss = self.generator_criterion(targ_out, targ_labels).detach().cpu().numpy()
         return running_loss, target_loss

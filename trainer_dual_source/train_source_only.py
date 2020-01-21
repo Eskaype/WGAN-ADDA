@@ -19,8 +19,8 @@ class multi_source:
         self.num_domains = 2
         self.source_loader, self.target_loader, self.test_loader, self.nclass = make_data_loader(args, **kwargs)
         self.tbar = tqdm(self.test_loader, desc='\r')
-        self.best_IoU = {'disc': 0.77, 'cup': 0.60}
-        self.attempt = 9.8
+        self.best_IoU = {'disc': 0.77, 'cup': 0.65}
+        self.attempt = 9.6
         self.multisource_trainer = multisource_trainer(args, self.num_class)
         self.trainer_multisource(args)
 
@@ -150,7 +150,7 @@ def main():
     parser.add_argument('--k_targ', type=int, default=1,
                         help='skip validation during training')
     # checking point
-    parser.add_argument('--resume', type=str, default='pretrained/deeplab-resnet.pth.tar', #'best_origa/m-adda_wgan_clip_0.03v_9.5.pth.tar' #'pretrained/deeplab-resnet.pth.tar',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
+    parser.add_argument('--resume', type=str, default= 'best_origa/m-adda_wgan_clip_0.03v_9.8.pth.tar',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
                         help='put the path to resuming file if needed')
     parser.add_argument('--save_model', type=bool, default= 'False',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
                         help='put the path to resuming file if needed')
