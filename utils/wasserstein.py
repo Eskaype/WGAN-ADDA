@@ -1,12 +1,13 @@
 import os
 import torch
 import numpy as np
+import torch.distributions.dirichlet as dirichlet
 
-class Wassterstein(object):
+class Wasserstein(object):
     def __init__(self):
         self.gen_loss = []
         self.disc_loss = []
-    def update_single_wasserstein(self, X, Y, src_lab, targ_lab):
+    def update_single_wasserstein(self, X, Y):
         #scale = torch.cuda.FloatTensor([0.4, 0.6])
         batch_size = X.shape[0]
         wasserstein_distance_src = 0
@@ -41,12 +42,18 @@ class Wassterstein(object):
 
 
     def gradient_regularization(self, critic, h_s, h_t):
-        import pdb
-        alpha = torch.rand(h_s.size(0),1).cuda()
-        #pdb.set_trace()
-        alpha = alpha.expand(h_s.size(0), int(h_s.nelement()/h_s.size(0))).contiguous().view(h_s.size(0), h_s.size(1), h_s.size(2), h_s.size(3))
-        differences = h_t - h_s
-        interpolates = h_s + (alpha * differences)
+        if len(h_s) == 2:
+            alpha1, alpha2, alpha3 = dirichlet_number_generator()
+            alpha1 = alpha1.expand(h_s[0].size(0), int(h_s[0].nelement()/h_s[0].size(0))).contiguous().view(h_s[0].size(0), h_s[0].size(1), h_s[0].size(2), h_s[0].size(3))
+            alpha2 = alpha2.expand(h_s[1].size(0), int(h_s[1].nelement()/h_s[1].size(0))).contiguous().view(h_s[1].size(0), h_s[1].size(1), h_s[1].size(2), h_s[1].size(3))
+            alpha3 = alpha2.expand(h_t[1].size(0), int(h_t[1].nelement()/h_t[1].size(0))).contiguous().view(h_t[1].size(0), h_t[1].size(1), h_t[1].size(2), h_t[1].size(3))
+            interpolates = alpha3 * h_t  + alpha1 * h_s[0] + alpha2 * h_s[1]
+        else:
+            alpha = torch.rand(h_s.size(0),1).cuda()
+            alpha = alpha.expand(h_s.size(0), int(h_s.nelement()/h_s.size(0))).contiguous().view(h_s.size(0), h_s.size(1), h_s.size(2), h_s.size(3))
+            differences = h_t - h_s
+            interpolates = h_s + (alpha * differences)
+
         interpolates = interpolates.cuda()
         #interpolates = torch.cat([interpolates, h_s, h_t]).requires_grad_()
         interpolates = torch.autograd.Variable(interpolates, requires_grad=True)
@@ -57,7 +64,7 @@ class Wassterstein(object):
         penalty_cup = 0
         penalty_disc = 0
         gradients_cup = gradients[:, 1, :,:]
-        gradients_disc = gradients[:, 1, :,:]
+        gradients_disc = gradients[:, 0, :,:]
 
         gradients_ = gradients_cup.view(2, -1)
         gradient_norm = torch.sqrt(torch.sum(gradients_ ** 2, dim=1) + 1e-12)
@@ -67,14 +74,21 @@ class Wassterstein(object):
         gradient_norm = torch.sqrt(torch.sum(gradients_ ** 2, dim=1) + 1e-12)
         penalty_disc= (torch.max(torch.zeros(1).float().cuda(), (gradient_norm - 1))**2).mean()
         return penalty_cup, penalty_disc
+
     def gradient_penalty_(self, critic, h_s, h_t):
         # based on: https://github.com/caogang/wgan-gp/blob/master/gan_cifar10.py#L116
-        import pdb
-        alpha = torch.rand(h_s.size(0),1).cuda()
-        #pdb.set_trace()
-        alpha = alpha.expand(h_s.size(0), int(h_s.nelement()/h_s.size(0))).contiguous().view(h_s.size(0), h_s.size(1), h_s.size(2), h_s.size(3))
-        differences = h_t - h_s
-        interpolates = h_s + (alpha * differences)
+        if len(h_s) == 2:
+            alpha1, alpha2 = dirichlet_number_generator()
+            alpha1 = alpha1.expand(h_s[0].size(0), int(h_s[0].nelement()/h_s[0].size(0))).contiguous().view(h_s[0].size(0), h_s[0].size(1), h_s[0].size(2), h_s[0].size(3))
+            alpha2 = alpha2.expand(h_s[1].size(0), int(h_s[1].nelement()/h_s[1].size(0))).contiguous().view(h_s[1].size(0), h_s[1].size(1), h_s[1].size(2), h_s[1].size(3))
+            differences = h_t - h_s
+            interpolates = h_s + (alpha * differences)
+        else:
+            alpha = torch.rand(h_s.size(0),1).cuda()
+            alpha = alpha.expand(h_s.size(0), int(h_s.nelement()/h_s.size(0))).contiguous().view(h_s.size(0), h_s.size(1), h_s.size(2), h_s.size(3))
+            differences = h_t - h_s
+            interpolates = h_s + (alpha * differences)
+
         interpolates = interpolates.cuda()
         #interpolates = torch.cat([interpolates, h_s, h_t]).requires_grad_()
         interpolates = torch.autograd.Variable(interpolates, requires_grad=True)
@@ -83,8 +97,6 @@ class Wassterstein(object):
                         grad_outputs=torch.ones_like(preds),
                         retain_graph=True, create_graph=True)[0]
         ###############TO BE CHECKED AND UPDATED################!!
-        import pdb
-        #pdb.set_trace()
         gradient_penalty = 0
         gradient_penalty_disc = 0
         for i,_ in enumerate(['disc', 'cup']):
@@ -97,22 +109,6 @@ class Wassterstein(object):
             gradient_penalty += ((gradient_norm - 1)**2).mean()
         return gradient_penalty
 
-    # def gradient_penalty(self, D, real_samples, fake_samples):
-    #     """Calculates the gradient penalty loss for WGAN GP"""
-    #     # Random weight term for interpolation between real and fake samples
-    #     alpha = torch.cuda.FloatTensor(np.random.random((real_samples.size(0), 1, 1, 1)))
-    #     # Get random interpolation between real and fake samples
-    #     interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
-    #     _, d_interpolates = D(interpolates)
-    #     fake = torch.autograd.Variable(torch.cuda.FloatTensor(torch.ones_like(d_interpolates)), requires_grad=False)
-    #     # Get gradient w.r.t. interpolates
-    #     gradients = torch.autograd.grad(
-    #         outputs=d_interpolates,
-    #         inputs=interpolates,
-    #         grad_outputs=fake,
-    #         create_graph=True,
-    #         retain_graph=True
-    #     )[0]
-    #     gradients = gradients.view(gradients.size(0), -1)
-    #     gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
-    #     return gradient_penalty
+    def dirichlet_number_generator():
+        m = dirichlet.Dirichlet(torch.Tensor([1, 1, 1]))
+        return m.sample()

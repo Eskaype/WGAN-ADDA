@@ -87,3 +87,33 @@ class madan_trainer(object):
         # compute target loss
         target_loss = self.generator_criterion(targ_out, targ_labels).detach().cpu().numpy()
         return running_loss, target_loss
+
+    def update_wasserstein(self, src_image, src_labels, targ_image, targ_labels,options):
+        running_loss = 0.0
+        src_labels = torch.cat([src_labels[:,0].squeeze(), src_labels[:,1].squeeze()], 0).type(torch.LongTensor).cuda()
+        self.model_optim.zero_grad()
+        # src image shape batch_size x domain x 3 channels x height x width
+        src_out, source_feature = self.generator_model(torch.cat([src_image[:,0].squeeze(), src_image[:,1].squeeze()]))
+        targ_out, target_feature = self.generator_model(targ_image)
+        #  Discriminator
+        discriminator_x = torch.cat([source_feature, target_feature]).squeeze()
+        disc_clf = self.discriminator_model(discriminator_x)
+        # Losses
+        losses = torch.stack([self.generator_criterion(src_out[j*self.batch_size:j+self.batch_size], src_labels[j*self.batch_size:j+self.batch_size]) for j in range(self.num_domains)])
+        slabels = torch.ones(self.batch_size, disc_clf.shape[2], disc_clf.shape[3], requires_grad=False).type(torch.LongTensor).cuda()
+        tlabels = torch.zeros(self.batch_size*2, disc_clf.shape[2], disc_clf.shape[3], requires_grad=False).type(torch.LongTensor).cuda()
+        domain_losses = torch.stack([self.generator_criterion(disc_clf[j*self.batch_size:j+self.batch_size].squeeze(), slabels) for j in range(self.num_domains)])
+        domain_losses = torch.cat([domain_losses, self.generator_criterion(disc_clf[2*self.batch_size:2*self.batch_size+2*self.batch_size].squeeze(), tlabels).view(-1)])
+        # Different final loss function depending on different training modes.
+        if options['mode']== "maxmin":
+            loss = torch.max(losses) + options['mu'] * torch.min(domain_losses)
+        elif options['mode'] == "dynamic":
+            loss = torch.log(torch.sum(torch.exp(options['gamma'] * (losses + options['mu'] * domain_losses)))) / options['gamma']
+        else:
+            raise ValueError("No support for the training mode on madnNet: {}.".format(options['mode']))
+        loss.backward()
+        self.model_optim.step()
+        running_loss += loss.detach().cpu().numpy()
+        # compute target loss
+        target_loss = self.generator_criterion(targ_out, targ_labels).detach().cpu().numpy()
+        return running_loss, target_loss
