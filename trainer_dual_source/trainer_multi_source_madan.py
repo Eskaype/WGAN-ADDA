@@ -58,6 +58,7 @@ class madan_trainer(object):
         self.model_optim = torch.optim.Adadelta(self.generator_params+self.discriminator_params)
         self.scheduler = LR_Scheduler(args.lr_scheduler, args.lr, args.epochs, lr_step=30, iters_per_epoch=100)
 
+    # for madan the src_image has shape B x source_index x channel x H x W
     def update_weights(self, src_image, src_labels, targ_image, targ_labels,options):
         running_loss = 0.0
         src_labels = torch.cat([src_labels[:,0].squeeze(), src_labels[:,1].squeeze()], 0).type(torch.LongTensor).cuda()
@@ -100,10 +101,7 @@ class madan_trainer(object):
         disc_clf = self.discriminator_model(discriminator_x)
         # Losses
         losses = torch.stack([self.generator_criterion(src_out[j*self.batch_size:j+self.batch_size], src_labels[j*self.batch_size:j+self.batch_size]) for j in range(self.num_domains)])
-        slabels = torch.ones(self.batch_size, disc_clf.shape[2], disc_clf.shape[3], requires_grad=False).type(torch.LongTensor).cuda()
-        tlabels = torch.zeros(self.batch_size*2, disc_clf.shape[2], disc_clf.shape[3], requires_grad=False).type(torch.LongTensor).cuda()
-        domain_losses = torch.stack([self.generator_criterion(disc_clf[j*self.batch_size:j+self.batch_size].squeeze(), slabels) for j in range(self.num_domains)])
-        domain_losses = torch.cat([domain_losses, self.generator_criterion(disc_clf[2*self.batch_size:2*self.batch_size+2*self.batch_size].squeeze(), tlabels).view(-1)])
+        domain_losses = torch.stack([update_single_wasserstein(disc_clf[j*self.batch_size:j+self.batch_size].squeeze(), disc_clf[self.num_domains*self.batch_size:self.num_domains+self.batch_size].squeeze()) for j in range(self.num_domains)])
         # Different final loss function depending on different training modes.
         if options['mode']== "maxmin":
             loss = torch.max(losses) + options['mu'] * torch.min(domain_losses)
