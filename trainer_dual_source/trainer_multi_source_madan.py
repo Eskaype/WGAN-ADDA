@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from utils.lr_scheduler import LR_Scheduler
 from models.sync_batchnorm.replicate import patch_replication_callback
 from models.discriminator import FCDiscriminator, FCDiscriminator_WGAN
+from utils.wasserstein import Wasserstein
 import torch
 import os
 from torch import nn
@@ -18,6 +19,7 @@ class madan_trainer(object):
         self.batch_size = args.batch_size
         self.nnclass = nnclass
         self.num_domains = ndomains
+        self.init_wasserstein = Wasserstein()
         self.init_generator(args)
         self.init_discriminator(args)
         self.init_optimizer(args)
@@ -89,7 +91,7 @@ class madan_trainer(object):
         target_loss = self.generator_criterion(targ_out, targ_labels).detach().cpu().numpy()
         return running_loss, target_loss
 
-    def update_wasserstein(self, src_image, src_labels, targ_image, targ_labels,options):
+    def update_wasserstein(self, src_image, src_labels, targ_image, targ_labels, options):
         running_loss = 0.0
         src_labels = torch.cat([src_labels[:,0].squeeze(), src_labels[:,1].squeeze()], 0).type(torch.LongTensor).cuda()
         self.model_optim.zero_grad()
@@ -100,17 +102,30 @@ class madan_trainer(object):
         discriminator_x = torch.cat([source_feature, target_feature]).squeeze()
         disc_clf = self.discriminator_model(discriminator_x)
         # Losses
-        losses = torch.stack([self.generator_criterion(src_out[j*self.batch_size:j+self.batch_size], src_labels[j*self.batch_size:j+self.batch_size]) for j in range(self.num_domains)])
-        domain_losses = torch.stack([update_single_wasserstein(disc_clf[j*self.batch_size:j+self.batch_size].squeeze(), disc_clf[self.num_domains*self.batch_size:self.num_domains+self.batch_size].squeeze()) for j in range(self.num_domains)])
+        losses = torch.stack([self.generator_criterion(src_out[j*self.batch_size:j*self.batch_size+self.batch_size], src_labels[j*self.batch_size:j*self.batch_size+self.batch_size]) for j in range(self.num_domains)])
+        wass_loss = [self.init_wasserstein.update_wasserstein_dual_source(disc_clf[j*self.batch_size:j*self.batch_size+self.batch_size].squeeze(),
+                                                                                     disc_clf[self.num_domains*self.batch_size:self.num_domains * self.batch_size+self.batch_size].squeeze())
+                                                                                     for j in range(self.num_domains)]
+
+        domain_losses = torch.stack(wass_loss)
+        # compute gradient penalty
+        penalty_cup, penalty_disc = self.init_wasserstein.gradient_regularization_dual_source(self.discriminator_model,
+                                                                source_feature.detach(),
+                                                                target_feature.detach(),
+                                                                options['batch_size'],
+                                                                options['num_domains'])
         # Different final loss function depending on different training modes.
         if options['mode']== "maxmin":
-            loss = torch.max(losses) + options['mu'] * torch.min(domain_losses)
+            loss = torch.max(losses) + options['mu'] * torch.min(domain_losses) + options['gamma'] * penalty_cup + options['gamma'] * penalty_disc
         elif options['mode'] == "dynamic":
+            # TODO Wasserstein not implemented yet for this
             loss = torch.log(torch.sum(torch.exp(options['gamma'] * (losses + options['mu'] * domain_losses)))) / options['gamma']
         else:
             raise ValueError("No support for the training mode on madnNet: {}.".format(options['mode']))
         loss.backward()
         self.model_optim.step()
+        for p in self.discriminator_model.parameters():
+               p.data.clamp_(-0.01, 0.01)
         running_loss += loss.detach().cpu().numpy()
         # compute target loss
         target_loss = self.generator_criterion(targ_out, targ_labels).detach().cpu().numpy()

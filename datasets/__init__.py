@@ -22,8 +22,6 @@ def make_weights_for_balanced_classes(images, nclasses):
     return weight
 
 def make_data_loader(args, **kwargs):
-
-
     if args.dataset == ['origa', 'refuge']:
         train_set = make_dataset(args, split='train', dataset=[args.dataset[0],args.dataset[1]], multi_source_type='single')
         val_set = make_dataset(args, split='test', dataset=[args.dataset[0],args.dataset[1]], multi_source_type='single')
@@ -35,15 +33,17 @@ def make_data_loader(args, **kwargs):
         return train_loader, val_loader, test_loader, num_class
     elif args.dataset == ['origa', 'refuge', 'drishti']:
         train_set = make_dataset(args, split='train', dataset=[args.dataset[0],
-                                                        args.dataset[1],args.dataset[2]], multi_source_type='twosource')
+                                                               args.dataset[1],
+                                                               args.dataset[2]],
+                                                               multi_source_type='twosource')
         val_set = make_dataset(args, split='test', dataset= [args.dataset[0],
                                                         args.dataset[1],args.dataset[2]], multi_source_type='twosource')
         test_set = make_dataset(args, split='test', dataset = [args.dataset[0],
                                                         args.dataset[1],args.dataset[2]], multi_source_type='twosource')
         num_class = train_set.NUM_CLASSES
         train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=0, pin_memory= True, worker_init_fn=_init_fn, drop_last=True)
-        val_loader = DataLoader(val_set, batch_size=args.batch_size*2, shuffle=False, num_workers=0, pin_memory= True, drop_last=True, worker_init_fn=_init_fn)
-        test_loader = DataLoader(val_set, batch_size=args.batch_size*2, shuffle=False, num_workers=0, pin_memory= True, drop_last=True)
+        val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory= True, drop_last=True, worker_init_fn=_init_fn)
+        test_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory= True, drop_last=True)
         print(len(train_loader), len(val_loader), len(test_loader))
         return train_loader, val_loader, test_loader, num_class
     else:

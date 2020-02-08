@@ -46,7 +46,7 @@ class multi_source:
             batch_iterator_target = enumerate(self.target_loader)
             torch.manual_seed(1 + epoch)
             len_dataloader = max(len(self.source_loader), len(self.target_loader))
-            options = {'gamma': 0.5 , 'mu': 1e-2, 'mode': 'maxmin'}
+            options = {'gamma': 0.5 , 'mu': 1e-2, 'mode': 'maxmin', 'batch_size': args.batch_size, 'num_domains': 2}
             for step in trange(len_dataloader, leave=True):
                 try:
                     data_src = next(batch_iterator_source)
@@ -54,9 +54,11 @@ class multi_source:
                 except StopIteration:
                     batch_iterator_target = enumerate(self.target_loader)
                     data_targ = next(batch_iterator_target)
+                import pdb
+                pdb.set_trace()
                 source_x, src_labels = data_src[1][0].cuda(), data_src[1][1].cuda()
                 target_x, target_lab = data_targ[1][0].cuda(),  data_targ[1][1].cuda()
-                source_loss, tgt_loss = self.madan_trainer.update_weights(source_x, src_labels, target_x, target_lab, options) #0.2, 0.01
+                source_loss, tgt_loss = self.madan_trainer.update_wasserstein(source_x, src_labels, target_x, target_lab, options) #0.2, 0.01
                 total_loss+= tgt_loss
                 if step %50 ==0:
                     print('batch wise loss {} at batch {}'.format(total_loss/(step+1), step+1))
@@ -171,7 +173,7 @@ def main():
             args.gpu_ids = [int(s) for s in args.gpu_ids.split(',')]
         except ValueError:
             raise ValueError('Argument --gpu_ids must be a comma-separated list of integers only')
-    args.batch_size = 3
+    args.batch_size = 4
     if args.lr is None:
         lrs = {
             'coco': 0.1,
