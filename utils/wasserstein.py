@@ -62,8 +62,6 @@ class Wasserstein(object):
         source1 = h_s[0:batch_size]
         source2 = h_s[batch_size:num_source*batch_size]
         target = h_t[0:batch_size]
-        import pdb
-        pdb.set_trace()
         alpha1 = alpha1.expand(source1.size(0), int(source1.nelement()/source1.size(0))).contiguous().view(source1.size(0), source1.size(1), source1.size(2), source1.size(3)).cuda()
         alpha2 = alpha2.expand(source2.size(0), int(source2.nelement()/source2.size(0))).contiguous().view(source2.size(0), source2.size(1), source2.size(2), source2.size(3)).cuda()
         alpha3 = alpha3.expand(target.size(0), int(target.nelement()/target.size(0))).contiguous().view(target.size(0), target.size(1), target.size(2), target.size(3)).cuda()
@@ -71,7 +69,7 @@ class Wasserstein(object):
         interpolates = torch.cat([alpha3 * target, alpha3 * target])  + torch.cat([alpha1 * source1 ,alpha2 * source2])
         interpolates = interpolates.cuda()
         interpolates = torch.autograd.Variable(interpolates, requires_grad=True)
-        _, preds = critic(interpolates) # size batch_size * num_src_domains
+        preds = critic(interpolates) # size batch_size * num_src_domains
         gradients = torch.autograd.grad(preds, interpolates,
                         grad_outputs=torch.ones_like(preds),
                         retain_graph=True, create_graph=True)[0]
@@ -80,11 +78,11 @@ class Wasserstein(object):
         gradients_cup = gradients[:, 1, :,:]
         gradients_disc = gradients[:, 0, :,:]
 
-        gradients_ = gradients_cup.view(2, -1)
+        gradients_ = gradients_cup.contiguous().view(2, -1)
         gradient_norm = torch.sqrt(torch.sum(gradients_ ** 2, dim=1) + 1e-12)
         penalty_cup= (torch.max(torch.zeros(1).float().cuda(), (gradient_norm - 1))**2).mean()
 
-        gradients_ = gradients_disc.view(2, -1)
+        gradients_ = gradients_disc.contiguous().view(2, -1)
         gradient_norm = torch.sqrt(torch.sum(gradients_ ** 2, dim=1) + 1e-12)
         penalty_disc= (torch.max(torch.zeros(1).float().cuda(), (gradient_norm - 1))**2).mean()
         return penalty_cup, penalty_disc

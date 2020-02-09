@@ -54,8 +54,6 @@ class multi_source:
                 except StopIteration:
                     batch_iterator_target = enumerate(self.target_loader)
                     data_targ = next(batch_iterator_target)
-                import pdb
-                pdb.set_trace()
                 source_x, src_labels = data_src[1][0].cuda(), data_src[1][1].cuda()
                 target_x, target_lab = data_targ[1][0].cuda(),  data_targ[1][1].cuda()
                 source_loss, tgt_loss = self.madan_trainer.update_wasserstein(source_x, src_labels, target_x, target_lab, options) #0.2, 0.01
