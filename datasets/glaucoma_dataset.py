@@ -27,8 +27,10 @@ class make_dataset:
         if dataset[-1] == 'all':
             self.target =  read_dataset(split_path['test'], args.target_dataset, MASK_PATHS[dataset[0]], dataset[0])
             self.target.append(read_dataset(split_path['test'], args.target_dataset, MASK_PATHS[dataset[1]], dataset[1]))
+        elif split == 'test':
+            self.target = read_dataset(split_path['test'], args.target_dataset, MASK_PATHS[dataset[-1]], dataset[-1])
         else:
-            self.target =  read_dataset(split_path['combined'], args.target_dataset, MASK_PATHS[dataset[-1]], dataset[-1])
+            self.target =  read_dataset(split_path['train'], args.target_dataset, MASK_PATHS[dataset[-1]], dataset[-1])
             #print("dataset split {} {} {}".format(args.target_dataset,  MASK_PATHS[dataset[-1]],  dataset[-1]))
         self.split = split
         self.multi_source_type = multi_source_type

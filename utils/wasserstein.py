@@ -42,6 +42,8 @@ class Wasserstein(object):
 
     def update_wasserstein(self, X, Y, src_lab, targ_lab):
         #scale = torch.cuda.FloatTensor([0.4, 0.6])
+        import pdb
+        pdb.set_trace()
         batch_size = X.shape[0]
         wasserstein_distance_source = 0
         wasserstein_distance_target = 0
@@ -73,21 +75,14 @@ class Wasserstein(object):
         gradients = torch.autograd.grad(preds, interpolates,
                         grad_outputs=torch.ones_like(preds),
                         retain_graph=True, create_graph=True)[0]
-        penalty_cup = 0
-        penalty_disc = 0
-        gradients_cup = gradients[:, 1, :,:]
-        gradients_disc = gradients[:, 0, :,:]
-
-        gradients_ = gradients_cup.contiguous().view(2, -1)
+        penalty = 0
+        gradients_ = gradients.contiguous().view(batch_size, -1)
         gradient_norm = torch.sqrt(torch.sum(gradients_ ** 2, dim=1) + 1e-12)
-        penalty_cup= (torch.max(torch.zeros(1).float().cuda(), (gradient_norm - 1))**2).mean()
+        penalty= (torch.max(torch.zeros(1).float().cuda(), (gradient_norm - 1))**2).mean()
+        return penalty
 
-        gradients_ = gradients_disc.contiguous().view(2, -1)
-        gradient_norm = torch.sqrt(torch.sum(gradients_ ** 2, dim=1) + 1e-12)
-        penalty_disc= (torch.max(torch.zeros(1).float().cuda(), (gradient_norm - 1))**2).mean()
-        return penalty_cup, penalty_disc
 
-    def gradient_regularization(self, critic, h_s, h_t):
+    def gradient_regularization(self, critic, h_s, h_t, batch_size):
         alpha = torch.rand(h_s.size(0),1).cuda()
         alpha = alpha.expand(h_s.size(0), int(h_s.nelement()/h_s.size(0))).contiguous().view(h_s.size(0), h_s.size(1), h_s.size(2), h_s.size(3))
         differences = h_t - h_s
@@ -100,19 +95,37 @@ class Wasserstein(object):
         gradients = torch.autograd.grad(preds, interpolates,
                         grad_outputs=torch.ones_like(preds),
                         retain_graph=True, create_graph=True)[0]
-        penalty_cup = 0
-        penalty_disc = 0
-        gradients_cup = gradients[:, 1, :,:]
-        gradients_disc = gradients[:, 0, :,:]
 
-        gradients_ = gradients_cup.view(2, -1)
+        gradients_ = gradients.view(batch_size, -1)
         gradient_norm = torch.sqrt(torch.sum(gradients_ ** 2, dim=1) + 1e-12)
-        penalty_cup= (torch.max(torch.zeros(1).float().cuda(), (gradient_norm - 1))**2).mean()
+        penalty= (torch.max(torch.zeros(1).float().cuda(), (gradient_norm - 1))**2).mean()
+        return penalty
+    # def gradient_regularization(self, critic, h_s, h_t):
+    #     alpha = torch.rand(h_s.size(0),1).cuda()
+    #     alpha = alpha.expand(h_s.size(0), int(h_s.nelement()/h_s.size(0))).contiguous().view(h_s.size(0), h_s.size(1), h_s.size(2), h_s.size(3))
+    #     differences = h_t - h_s
+    #     interpolates = h_s + (alpha * differences)
 
-        gradients_ = gradients_disc.view(2, -1)
-        gradient_norm = torch.sqrt(torch.sum(gradients_ ** 2, dim=1) + 1e-12)
-        penalty_disc= (torch.max(torch.zeros(1).float().cuda(), (gradient_norm - 1))**2).mean()
-        return penalty_cup, penalty_disc
+    #     interpolates = interpolates.cuda()
+    #     #interpolates = torch.cat([interpolates, h_s, h_t]).requires_grad_()
+    #     interpolates = torch.autograd.Variable(interpolates, requires_grad=True)
+    #     _, preds = critic(interpolates)
+    #     gradients = torch.autograd.grad(preds, interpolates,
+    #                     grad_outputs=torch.ones_like(preds),
+    #                     retain_graph=True, create_graph=True)[0]
+    #     penalty_cup = 0
+    #     penalty_disc = 0
+    #     gradients_cup = gradients[:, 1, :,:]
+    #     gradients_disc = gradients[:, 0, :,:]
+
+    #     gradients_ = gradients_cup.view(2, -1)
+    #     gradient_norm = torch.sqrt(torch.sum(gradients_ ** 2, dim=1) + 1e-12)
+    #     penalty_cup= (torch.max(torch.zeros(1).float().cuda(), (gradient_norm - 1))**2).mean()
+
+    #     gradients_ = gradients_disc.view(2, -1)
+    #     gradient_norm = torch.sqrt(torch.sum(gradients_ ** 2, dim=1) + 1e-12)
+    #     penalty_disc= (torch.max(torch.zeros(1).float().cuda(), (gradient_norm - 1))**2).mean()
+    #     return penalty_cup, penalty_disc
 
     def gradient_penalty_(self, critic, h_s, h_t):
         # based on: https://github.com/caogang/wgan-gp/blob/master/gan_cifar10.py#L116

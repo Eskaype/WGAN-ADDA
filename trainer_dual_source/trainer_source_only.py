@@ -1,5 +1,6 @@
 from utils.loss import SegmentationLosses
 from models.deeplab import *
+from models.unet import *
 import torch.nn.functional as F
 from utils.lr_scheduler import LR_Scheduler
 from models.sync_batchnorm.replicate import patch_replication_callback
@@ -19,11 +20,14 @@ class multisource_trainer(object):
 
     def init_generator(self, args):
 
-        self.generator_model = DeepLab(num_classes=self.nnclass,
-                            backbone='resnet',
-                            output_stride=16,
-                            sync_bn = None,
-                            freeze_bn=False)
+        if args.arch == 'deeplab':
+            self.generator_model = DeepLab(num_classes=self.nnclass,
+                                backbone='resnet',
+                                output_stride=16,
+                                sync_bn = None,
+                                freeze_bn=False)
+        else:
+            self.generator_model = UNet(n_channels=3, n_classes=2, bilinear=True)
 
         self.generator_model = torch.nn.DataParallel(self.generator_model).cuda()
         patch_replication_callback(self.generator_model)
@@ -48,6 +52,8 @@ class multisource_trainer(object):
     def update_weights(self, input_, src_labels):
         src_labels = torch.cat([src_labels[:,0].squeeze(), src_labels[:,1].squeeze()], 0).type(torch.LongTensor).cuda()
         input_ = torch.cat([input_[:,0].squeeze(), input_[:,1].squeeze()])
+        import pdb
+        pdb.set_trace()
         src_out, source_feature = self.generator_model(input_)
         seg_loss = self.generator_criterion(src_out, src_labels)
         seg_loss.backward()

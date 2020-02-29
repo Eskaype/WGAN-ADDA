@@ -11,6 +11,7 @@ from utils.metrics import compute_iou
 from utils.test_sanity import sanity_check, sanity_check_2, check_preprocess_sanity
 from trainer_dual_source.trainer_multi_source_mwdan import mwdan_trainer
 import torch
+import time
 
 class multi_source:
     def __init__(self, args):
@@ -21,26 +22,27 @@ class multi_source:
         self.source_loader, self.target_loader, self.test_loader, self.nclass = make_data_loader(args, **kwargs)
         self.tbar = tqdm(self.test_loader, desc='\r')
         self.best_IoU = {'disc': 0.77, 'cup': 0.65, 'mode': 'maxmin'}
-        self.attempt = 9.5
-        self.madan_trainer = madan_trainer(args, self.num_class, self.num_domains)
-        self.trainer_madan(args)
+        self.mwdan_trainer = mwdan_trainer(args, self.num_class, self.num_domains)
 
     def loop_iterable(self, iterable):
         while True:
             yield from iterable
 
-    def save_model(self, epoch, IoU):
+    def save_model(self, epoch, IoU, timestampLaunch):
         print('---- MODEL SAVE ---')
-        torch.save({'epoch': epoch + 1, 'state_dict': self.madan_trainer.target_model.state_dict(), 'best_auc': str(self.best_IoU['cup']),
-                    'optimizer' : self.madan_trainer.dda_optim.state_dict()}, 'best_origa/m-adda_wgan_clip_0.03' + "v_" + str(self.attempt) + '.pth.tar')
+        torch.save({'epoch': epoch + 1, 'state_dict': self.mwdan_trainer.target_model.state_dict(), 'best_auc': str(self.best_IoU['cup']),
+                    'optimizer' : self.mwdan_trainer.dda_optim.state_dict()}, 'best_origa/multi_wgan_clip_0.03_{}'.format(IoU) + "_" + timestampLaunch + '.pth.tar')
         return
 
-    def trainer_madan(self, args):
+    def trainer_mwdan(self, args):
         print("trainer initialized training started")
+        timestampTime = time.strftime("%H%M%S")
+        timestampDate = time.strftime("%d%m%Y")
+        timestampLaunch = timestampDate + '-' + timestampTime
         for epoch in range(args.epochs):
             # self.validation(args, epoch)
-            self.madan_trainer.generator_model.train()
-            self.madan_trainer.discriminator_model.train()
+            self.mwdan_trainer.generator_model.train()
+            self.mwdan_trainer.discriminator_model.train()
             total_loss = 0
             batch_iterator_source = enumerate(self.source_loader)
             batch_iterator_target = enumerate(self.target_loader)
@@ -56,7 +58,7 @@ class multi_source:
                     data_targ = next(batch_iterator_target)
                 source_x, src_labels = data_src[1][0].cuda(), data_src[1][1].cuda()
                 target_x, target_lab = data_targ[1][0].cuda(),  data_targ[1][1].cuda()
-                source_loss, tgt_loss = self.madan_trainer.update_wasserstein(source_x, src_labels, target_x, target_lab, options) #0.2, 0.01
+                source_loss, tgt_loss = self.mwdan_trainer.update_wasserstein(source_x, src_labels, target_x, target_lab, options) #0.2, 0.01
                 total_loss+= tgt_loss
                 if step %50 ==0:
                     print('batch wise loss {} at batch {}'.format(total_loss/(step+1), step+1))
@@ -65,7 +67,7 @@ class multi_source:
         return
 
     def validation(self, args, epoch):
-        self.madan_trainer.generator_model.eval()
+        self.mwdan_trainer.generator_model.eval()
         test_loss = 0.0
         predict_disc =None
         target_disc = None
@@ -75,8 +77,8 @@ class multi_source:
             image, target = data[0], data[1]
             image, target = image.cuda(), target.cuda()
             with torch.no_grad():
-                output,_ = self.madan_trainer.generator_model(image)
-            test_loss = self.madan_trainer.generator_criterion(output, target)
+                output,_ = self.mwdan_trainer.generator_model(image)
+            test_loss = self.mwdan_trainer.generator_criterion(output, target)
             pred = output.data.cpu().numpy()
             target = target.cpu().numpy()
             pred[pred >= 0.5] = 1
@@ -187,6 +189,6 @@ def main():
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.enabled = False
     torch.backends.cudnn.benchmark = False
-    multi_source(args)
-
+    trainer = multi_source(args)
+    trainer.trainer_mwdan(args)
 main()

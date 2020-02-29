@@ -33,6 +33,32 @@ class Preprocessor:
             img = img[left:right, top:bottom, :]
         return img
 
+
+
+    def randomHorizontalFlip(image, mask, u=0.5):
+        if np.random.random() < u:
+            image = cv2.flip(image, 1)
+            mask[:,:,1] = cv2.flip(mask[:,:,1], 1)
+            mask[:,:,0] = cv2.flip(mask[:,:,0], 1)
+
+        return image, mask
+
+    def randomVerticleFlip(image, mask, u=0.5):
+        if np.random.random() < u:
+            image = cv2.flip(image, 0)
+            mask[:,:,0] = cv2.flip(mask[:,:,0], 0)
+            mask[:,:,1] = cv2.flip(mask[:,:,1], 0)
+
+        return image, mask
+
+    def randomRotate90(image, mask, u=0.5):
+        if np.random.random() < u:
+            image=np.rot90(image)
+            mask[:,:,0]=np.rot90(mask[:,:,0])
+            mask[:,:,1]=np.rot90(mask[:,:,1])
+
+        return image, mask
+
     def transform_image(self, bgr, resize_width=None, resize_height=None, clip=2.0):
         """
         CLAHE and resize
@@ -75,7 +101,7 @@ class Preprocessor:
 
     def preprocess_image(self, file_name: str, image_type: str, dataset: str):
         """
-            self.preprocess_image_methods = ['centre_crop', 'clahe_norm', 'adjust_gamma']
+            self.preprocess_image_methods = ['centre_crop', 'clahe_norm', 'adjust_gamma', 'randomVerticleFlip', 'randomRotate']
         """
         if image_type == 'mask':
             org_msk = cv2.imread(file_name, 0)
@@ -83,7 +109,7 @@ class Preprocessor:
                 org_msk = self.read_image(org_msk)
             elif dataset == 'all' and len(np.unique(org_msk))>3:
                 org_msk = self.read_image(org_msk)
-            #print(list(np.unique(org_msk)))
+            #print(file_name, list(np.unique(org_msk)))
             assert list(np.unique(org_msk)) == [0.0, 128.0, 255.0]
             org_msk = cv2.resize(org_msk, (self.resize, self.resize), interpolation =cv2.INTER_NEAREST)
             org_msk = self.center_crop(org_msk, self.crop, 2)
