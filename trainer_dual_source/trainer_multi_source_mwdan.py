@@ -61,13 +61,13 @@ class mwdan_trainer(object):
         self.scheduler = LR_Scheduler(args.lr_scheduler, args.lr, args.epochs, lr_step=30, iters_per_epoch=100)
 
     # for madan the src_image has shape B x source_index x channel x H x W
-    def update_weights(self, src_image, src_labels, targ_image, targ_labels,options):
+    def update_weights(self, src_image, src_labels, tar_image, tar_labels,options):
         running_loss = 0.0
         src_labels = torch.cat([src_labels[:,0].squeeze(), src_labels[:,1].squeeze()], 0).type(torch.LongTensor).cuda()
         self.model_optim.zero_grad()
         # src image shape batch_size x domain x 3 channels x height x width
         src_out, source_feature = self.generator_model(torch.cat([src_image[:,0].squeeze(), src_image[:,1].squeeze()]))
-        targ_out, target_feature = self.generator_model(targ_image)
+        tar_out, target_feature = self.generator_model(tar_image)
         #  Discriminator
         discriminator_x = torch.cat([source_feature, target_feature]).squeeze()
         disc_clf = self.discriminator_model(discriminator_x)
@@ -88,38 +88,44 @@ class mwdan_trainer(object):
         self.model_optim.step()
         running_loss += loss.detach().cpu().numpy()
         # compute target loss
-        target_loss = self.generator_criterion(targ_out, targ_labels).detach().cpu().numpy()
+        target_loss = self.generator_criterion(tar_out, tar_labels).detach().cpu().numpy()
         return running_loss, target_loss
 
-    def update_wasserstein(self, src_image, src_labels, targ_image, targ_labels, options):
+    def update_wasserstein(self, srca_image, srca_labels, srcb_image, srcb_labels, tar_image, tar_labels, options, Cs=None):
         running_loss = 0.0
-        src_labels = torch.cat([src_labels[:,0].squeeze(), src_labels[:,1].squeeze()], 0).type(torch.LongTensor).cuda()
+        #src_labels = torch.cat([src_labels[:,0].squeeze(), src_labels[:,1].squeeze()], 0).type(torch.LongTensor).cuda()
+        src_labels = torch.cat([srca_labels, srcb_labels]).type(torch.LongTensor).cuda()
         self.model_optim.zero_grad()
         # src image shape batch_size x domain x 3 channels x height x width
-        src_out, source_feature = self.generator_model(torch.cat([src_image[:,0].squeeze(), src_image[:,1].squeeze()]))
-        targ_out, target_feature = self.generator_model(targ_image)
+        src_out, source_feature = self.generator_model(torch.cat([srca_image, srcb_image]))
+        tar_out, target_feature = self.generator_model(tar_image)
         #  Discriminator
         discriminator_x = torch.cat([source_feature, target_feature]).squeeze()
         disc_clf = self.discriminator_model(discriminator_x)
-        # Losses
+        # Segmentation Losses
         losses = torch.stack([self.generator_criterion(src_out[j*self.batch_size:j*self.batch_size+self.batch_size], src_labels[j*self.batch_size:j*self.batch_size+self.batch_size]) for j in range(self.num_domains)])
-        wass_loss = [self.init_wasserstein.update_wasserstein_dual_source(disc_clf[j*self.batch_size:j*self.batch_size+self.batch_size].squeeze(),
-                                                                                     disc_clf[self.num_domains*self.batch_size:self.num_domains * self.batch_size+self.batch_size].squeeze())
-                                                                                     for j in range(self.num_domains)]
-
-        domain_losses = torch.stack(wass_loss)
-        # compute gradient penalty
-        penalty = self.init_wasserstein.gradient_regularization_dual_source(self.discriminator_model,
-                                                                source_feature.detach(),
-                                                                target_feature.detach(),
-                                                                options['batch_size'],
-                                                                options['num_domains'])
+        # Wasserstain Losses
+        # wass_loss = [self.init_wasserstein.update_wasserstein_multi_source(disc_clf[j*self.batch_size:j*self.batch_size+self.batch_size].squeeze(),disc_clf[self.num_domains*self.batch_size:self.num_domains * self.batch_size+self.batch_size].squeeze()) for j in range(self.num_domains)]
+        #domain_losses = torch.stack(wass_loss)
+        Xs = [disc_clf[j*self.batch_size:j*self.batch_size+self.batch_size].squeeze() for j in range(self.num_domains)]
+        Y = disc_clf[self.num_domains*self.batch_size:self.num_domains * self.batch_size+self.batch_size].squeeze()
         # Different final loss function depending on different training modes.
+        # compute gradient penalty
+        penalty_0, penalty_1 = self.init_wasserstein.gradient_regularization_multi_source(self.discriminator_model,source_feature.detach(), target_feature.detach(), options['batch_size'], options['num_domains'],
+            options['Lf'])
         if options['mode']== "maxmin":
-            loss = torch.max(losses) + options['mu'] * torch.min(domain_losses) + options['gamma'] * penalty
+            # src_index x (B x H x W)
+            domain_losses_0 = self.init_wasserstein.update_wasserstein_multi_source( [Xs[0]], Y, torch.Tensor(Cs).cuda())
+            domain_losses_1 = self.init_wasserstein.update_wasserstein_multi_source( [Xs[1]], Y, torch.Tensor(Cs).cuda())
+            loss1= torch.mean(losses[0]) - options['mu'] * (domain_losses_0 + options['gamma'] * torch.mean(penalty_0))
+            loss2= torch.mean(losses[1]) - options['mu'] * (domain_losses_1 + options['gamma'] * torch.mean(penalty_1))
+            loss = torch.max(loss1,loss2)
+
         elif options['mode'] == "dynamic":
             # TODO Wasserstein not implemented yet for this
             loss = torch.log(torch.sum(torch.exp(options['gamma'] * (losses + options['mu'] * domain_losses)))) / options['gamma']
+        elif options['mode'] == 'default':
+            loss = torch.mean(losses) - options['mu'] * (torch.mean(domain_losses) + options['gamma'] * penalty)
         else:
             raise ValueError("No support for the training mode on madnNet: {}.".format(options['mode']))
         loss.backward()
@@ -129,5 +135,5 @@ class mwdan_trainer(object):
                p.data.clamp_(-0.01, 0.01)
         running_loss += loss.detach().cpu().numpy()
         # compute target loss
-        target_loss = self.generator_criterion(targ_out, targ_labels).detach().cpu().numpy()
+        target_loss = self.generator_criterion(tar_out, tar_labels).detach().cpu().numpy()
         return running_loss, target_loss

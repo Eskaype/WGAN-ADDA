@@ -19,8 +19,10 @@ class multi_source:
         self.device = 1
         self.num_class = 2
         self.num_domains = 2
-        self.source_loader, self.target_loader, self.test_loader, self.nclass = make_data_loader(args, **kwargs)
-        self.tbar = tqdm(self.test_loader, desc='\r')
+        self.srca_train_loader, self.srca__val_loader, self.srca__test_loader, self.nclass = make_data_loader(0, args.source1_dataset, args, **kwargs)
+        self.srcb_train_loader,self.srcb_val_loader, self.srcb_test_loader, self.nclass = make_data_loader(1, args.source2_dataset, args, **kwargs)
+        self.tgt_train_loader, self.tgt_val_loader, self.tgt_test_loader, self.nclass = make_data_loader(2, args.target_dataset, args, **kwargs)
+        self.tbar = tqdm(self.tgt_val_loader, desc='\r')
         self.best_IoU = {'disc': 0.77, 'cup': 0.65, 'mode': 'maxmin'}
         self.mwdan_trainer = mwdan_trainer(args, self.num_class, self.num_domains)
 
@@ -28,13 +30,14 @@ class multi_source:
         while True:
             yield from iterable
 
-    def save_model(self, epoch, IoU, timestampLaunch):
+    def save_model(self, epoch, iou_disc, iou_cup, timestampLaunch, save_dir='multi_wgan_clip_0.03'):
         print('---- MODEL SAVE ---')
-        torch.save({'epoch': epoch + 1, 'state_dict': self.mwdan_trainer.target_model.state_dict(), 'best_auc': str(self.best_IoU['cup']),
-                    'optimizer' : self.mwdan_trainer.dda_optim.state_dict()}, 'best_origa/multi_wgan_clip_0.03_{}'.format(IoU) + "_" + timestampLaunch + '.pth.tar')
+        if os.path.isdir(save_dir):
+            os.mkdir(save_dir)
+        torch.save({'epoch': epoch + 1, 'state_dict': self.mwdan_trainer.generator_model.state_dict(), 'iou_disc': str(iou_disc), 'iou_cup': str(iou_cup), 'optimizer' : self.mwdan_trainer.model_optim.state_dict()}, 'multi_wgan_clip/{}_{}_{}_{}.pth.tar'.format(timestampLaunch, iou_disc, iou_cup, epoch))
         return
 
-    def trainer_mwdan(self, args):
+    def train_mwdan(self, args):
         print("trainer initialized training started")
         timestampTime = time.strftime("%H%M%S")
         timestampDate = time.strftime("%d%m%Y")
@@ -44,41 +47,49 @@ class multi_source:
             self.mwdan_trainer.generator_model.train()
             self.mwdan_trainer.discriminator_model.train()
             total_loss = 0
-            batch_iterator_source = enumerate(self.source_loader)
-            batch_iterator_target = enumerate(self.target_loader)
+            batch_iterator_sourcea = enumerate(self.srca_train_loader)
+            batch_iterator_sourceb = enumerate(self.srcb_train_loader)
+            batch_iterator_target = enumerate(self.tgt_train_loader)
             torch.manual_seed(1 + epoch)
-            len_dataloader = max(len(self.source_loader), len(self.target_loader))
-            options = {'gamma': 0.5 , 'mu': 1e-2, 'mode': 'maxmin', 'batch_size': args.batch_size, 'num_domains': 2}
+            len_dataloader = max(max(len(self.srca_train_loader), len(self.srcb_train_loader)), len(self.tgt_train_loader))
+            options = {'gamma': args.gamma , 'mu': args.mu, 'mode': 'maxmin', 'batch_size': args.batch_size, 'num_domains': 2, 'Lf': args.Lf}
+            if args.Cs:
+                Cs = np.array([len(self.srca_train_loader), len(self.srcb_train_loader)])
+            else:
+                Cs = None
             for step in trange(len_dataloader, leave=True):
+                data_srca = next(batch_iterator_sourcea)
                 try:
-                    data_src = next(batch_iterator_source)
-                    data_targ = next(batch_iterator_target)
+                    data_srcb = next(batch_iterator_sourceb)
                 except StopIteration:
-                    batch_iterator_target = enumerate(self.target_loader)
-                    data_targ = next(batch_iterator_target)
-                source_x, src_labels = data_src[1][0].cuda(), data_src[1][1].cuda()
-                target_x, target_lab = data_targ[1][0].cuda(),  data_targ[1][1].cuda()
-                source_loss, tgt_loss = self.mwdan_trainer.update_wasserstein(source_x, src_labels, target_x, target_lab, options) #0.2, 0.01
-                total_loss+= tgt_loss
-                if step %50 ==0:
+                    batch_iterator_sourceb = enumerate(self.srcb_train_loader)
+                    data_srcb = next(batch_iterator_sourceb)
+                try:
+                    data_tar = next(batch_iterator_target)
+                except StopIteration:
+                    batch_iterator_target = enumerate(self.tgt_train_loader)
+                    data_tar = next(batch_iterator_target)
+
+                sourcea_x, srca_labels = data_srca[1][0].cuda(), data_srca[1][1].cuda()
+                sourceb_x, srcb_labels = data_srcb[1][0].cuda(), data_srcb[1][1].cuda()
+                target_x, tar_labels = data_tar[1][0].cuda(),  data_tar[1][1].cuda()
+                source_loss, target_loss = self.mwdan_trainer.update_wasserstein(sourcea_x, srca_labels, sourceb_x, srcb_labels, target_x, tar_labels, options, Cs) #0.2, 0.01
+                total_loss += target_loss
+                if step % 50 ==0:
                     print('batch wise loss {} at batch {}'.format(total_loss/(step+1), step+1))
             print("total epoch loss {}".format(total_loss/(step+1)))
-            self.validation(args, epoch)
+            self.validation(args, timestampLaunch, epoch)
         return
 
-    def validation(self, args, epoch):
+    def validation(self, args, timestampLaunch, epoch):
         self.mwdan_trainer.generator_model.eval()
-        test_loss = 0.0
-        predict_disc =None
-        target_disc = None
-        predict_cup = None
-        target_cup = None
+        test_loss = 0.
         for i, data in enumerate(self.tbar):
             image, target = data[0], data[1]
             image, target = image.cuda(), target.cuda()
             with torch.no_grad():
-                output,_ = self.mwdan_trainer.generator_model(image)
-            test_loss = self.mwdan_trainer.generator_criterion(output, target)
+                output, _ = self.mwdan_trainer.generator_model(image)
+            test_loss += self.mwdan_trainer.generator_criterion(output, target)
             pred = output.data.cpu().numpy()
             target = target.cpu().numpy()
             pred[pred >= 0.5] = 1
@@ -98,15 +109,17 @@ class multi_source:
         #print('[Epoch: %d, numImages: %5d]' % (epoch, i * args.batch_size + image.data.shape[0]))
         iou_cup = compute_iou(target_cup, predict_cup)
         iou_disc = compute_iou(target_disc, predict_disc)
+        cdr_pred = compute_cdr(predict_cup, predict_disc)
+        cdr_gt = compute_cdr(target_cup, target_disc)
         print("for Epoch {} iou disc:{} and iou_cup:{}".format(epoch , iou_disc, iou_cup))
-        if iou_cup > self.best_IoU['cup']:
-            self.best_IoU['cup'] = iou_cup
-            self.best_IoU['disc'] = iou_disc
-            print("best iou is {} on epoch {}".format(iou_cup, epoch))
-            if False:
-                self.save_model(epoch)
-                print("best model saved at {}")
+        if iou_cup > self.best_IoU['cup'] or iou_disc > self.best_IoU['disc']:
+            if iou_cup > self.best_IoU['cup']:
+                self.best_IoU['cup'] = iou_cup
+            if iou_disc > self.best_IoU['disc']:
+                self.best_IoU['disc'] = iou_disc
 
+            print("a best model saved with iou for cup {} and for disc is {} on epoch {}".format(iou_cup, iou_disc, epoch))
+            self.save_model(epoch, iou_disc, iou_cup, timestampLaunch, save_dir=args.output_dir)
 
 def main():
     parser = argparse.ArgumentParser(description="PyTorch DeeplabV3Plus Training")
@@ -122,7 +135,8 @@ def main():
                         help='dataset name (default: pascal)')
     parser.add_argument('--target_dataset', type=str, default='/storage/zwang/datasets/drishti/split_drishti/',
                         help='dataset name (default: pascal)')
-
+    parser.add_argument('--Lf', type=float, default=2.0, metavar='LF',
+                        help='gradient penalty (default: auto)')
     parser.add_argument('--lr', type=float, default=None, metavar='LR',
                         help='learning rate (default: auto)')
     parser.add_argument('--lr-scheduler', type=str, default='poly',
@@ -131,12 +145,16 @@ def main():
     parser.add_argument('--momentum', type=float, default=0.9,
                         metavar='M', help='momentum (default: 0.9)')
     parser.add_argument('--weight-decay', type=float, default=1e-5,
-                        metavar='M', help='w-decay (default: 5e-4)')
+                        metavar='w', help='w-decay (default: 5e-4)')
     parser.add_argument('--nesterov', action='store_true', default=False,
                         help='whether use nesterov (default: False)')
     # cuda, seed and logging
     parser.add_argument('--no-cuda', action='store_true', default=
                         False, help='disables CUDA training')
+
+    parser.add_argument('--Cs', action='Cs', default=
+                        True, help='if use sample proportion prior')
+
     parser.add_argument('--gpu-ids', type=str, default='0',
                         help='use which gpu to train, must be a \
                         comma-separated list of integers only (default=0)')
@@ -148,7 +166,7 @@ def main():
                         help='loss func type (default: ce)')
     parser.add_argument('--lr_critic', type=int, default=1e-4,
                         help='skip validation during training')
-    parser.add_argument('--gamma', type=int, default=10,
+    parser.add_argument('--gamma', type=int, default=0.5,
                         help='skip validation during training')
     parser.add_argument('--lambda_g', type=int, default=1,
                         help='skip validation during training')
@@ -156,14 +174,18 @@ def main():
                         help='number of epochs to train (default: auto)')
 
     parser.add_argument('--k_disc', type=int, default=1,
-                        help='skip validation during training')
+                        help='disc step')
     parser.add_argument('--k_src', type=int, default=1,
-                        help='skip validation during training')
+                        help='src step')
     parser.add_argument('--k_targ', type=int, default=1,
                         help='skip validation during training')
     # checking point
-    parser.add_argument('--resume', type=str, default= 'best_origa/m-adda_wgan_clip_0.03v_9.8.pth.tar',#'pretrained/deeplab-resnet.pth.tar',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
-                        help='put the path to resuming file if needed')
+    parser.add_argument('--resume', type=str, default= "pretrained/deeplab-resnet.pth.tar", #'best_origa/m-adda_wgan_clip_0.03v_9.8.pth.tar',#'pretrained/deeplab-resnet.pth.tar',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
+        help='put the path to resuming file if needed')
+    parser.add_argument('--mu', type = int, default=0.01,
+                          "balancing paramter")
+    parser.add_argument('--output-dir', type=str, default='multi_wgan_clip_0.03', help='output path')
+
     parser.add_argument('--save_model', type=bool, default= 'False',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
                         help='put the path to resuming file if needed')
     args = parser.parse_args()
@@ -190,5 +212,8 @@ def main():
     torch.backends.cudnn.enabled = False
     torch.backends.cudnn.benchmark = False
     trainer = multi_source(args)
-    trainer.trainer_mwdan(args)
+    trainer.train_mwdan(args)
+
 main()
+with open('dual.o', 'w') as f:
+    f.close()

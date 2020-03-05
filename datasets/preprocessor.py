@@ -35,27 +35,27 @@ class Preprocessor:
 
 
 
-    def randomHorizontalFlip(image, mask, u=0.5):
+    def randomHorizontalFlip(self, image, mask, u=0.2):
         if np.random.random() < u:
             image = cv2.flip(image, 1)
-            mask[:,:,1] = cv2.flip(mask[:,:,1], 1)
-            mask[:,:,0] = cv2.flip(mask[:,:,0], 1)
+            mask = cv2.flip(mask, 0)
+            #mask[:,:,1] = cv2.flip(mask[:,:,1], 0)
 
         return image, mask
 
-    def randomVerticleFlip(image, mask, u=0.5):
+    def randomVerticleFlip(self, image, mask, u=0.2):
         if np.random.random() < u:
             image = cv2.flip(image, 0)
-            mask[:,:,0] = cv2.flip(mask[:,:,0], 0)
-            mask[:,:,1] = cv2.flip(mask[:,:,1], 0)
+            mask = cv2.flip(mask, 1)
+            #mask[:,:,1] = cv2.flip(mask[:,:,1], 1)
 
         return image, mask
 
-    def randomRotate90(image, mask, u=0.5):
+    def randomRotate90(self, image, mask, u=0.2):
         if np.random.random() < u:
             image=np.rot90(image)
-            mask[:,:,0]=np.rot90(mask[:,:,0])
-            mask[:,:,1]=np.rot90(mask[:,:,1])
+            mask =np.rot90(mask)
+            #mask[:,:,1]=np.rot90(mask[:,:,1])
 
         return image, mask
 
@@ -89,6 +89,17 @@ class Preprocessor:
         img[mskd==1] = 128
         img[mskc==1] = 0
         return img
+
+    def read_mask_augmentation(self, org_msk):
+        """
+         use this function to read , resize and transpose dhristi data set mask
+        """
+        assert list(np.unique(org_msk)) == [0.0, 128.0, 255.0]
+        org_msk = cv2.resize(org_msk, (self.resize, self.resize), interpolation =cv2.INTER_NEAREST)
+        org_msk = self.center_crop(org_msk, self.crop, 2)
+        org_msk = self.msk_to_msk(org_msk)
+        #msk = org_msk.transpose((2,0,1))
+        return org_msk
 
     def msk_to_msk(self, org_msk):
         msk_oc = np.zeros((org_msk.shape[0],org_msk.shape[1]))

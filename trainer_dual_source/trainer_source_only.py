@@ -52,8 +52,6 @@ class multisource_trainer(object):
     def update_weights(self, input_, src_labels):
         src_labels = torch.cat([src_labels[:,0].squeeze(), src_labels[:,1].squeeze()], 0).type(torch.LongTensor).cuda()
         input_ = torch.cat([input_[:,0].squeeze(), input_[:,1].squeeze()])
-        import pdb
-        pdb.set_trace()
         src_out, source_feature = self.generator_model(input_)
         seg_loss = self.generator_criterion(src_out, src_labels)
         seg_loss.backward()

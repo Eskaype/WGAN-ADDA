@@ -150,7 +150,7 @@ def main():
     parser.add_argument('--k_targ', type=int, default=1,
                         help='skip validation during training')
     # checking point
-    parser.add_argument('--resume', type=str, default= #'best_origa/m-adda_wgan_clip_0.03v_9.8.pth.tar',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
+    parser.add_argument('--resume', type=str, default= None, #'best_origa/m-adda_wgan_clip_0.03v_9.8.pth.tar',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
                         help='put the path to resuming file if needed')
     parser.add_argument('--save_model', type=bool, default= 'False',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
                         help='put the path to resuming file if needed')
