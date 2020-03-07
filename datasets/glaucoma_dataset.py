@@ -7,9 +7,9 @@ from datasets.helper_func import read_dataset
 from datasets.preprocessor import Preprocessor
 #from datasets.preprocessor import randomHorizontalFlip, randomVerticleFlip, randomRotate90, randomHueSaturationValue, randomShiftScaleRotate
 
-MASK_PATHS = {"origa": "/storage/zwang/datasets/origa/",
-              "drishti":"/storage/zwang/datasets/drishti/Disc_Cup_Masks/",
-              "refuge": "/storage/zwang/datasets/refuge/cropped/Disc_Cup_Masks/"}
+MASK_PATHS = {"origa": "/storage/shreya/datasets/origa/",
+              "drishti":"/storage/shreya/datasets/drishti/Disc_Cup_Masks/",
+              "refuge": "/storage/shreya/datasets/refuge/cropped/Disc_Cup_Masks/"}
 
 
 class make_new_dataset:

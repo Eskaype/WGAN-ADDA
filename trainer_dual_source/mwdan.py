@@ -133,11 +133,11 @@ def main():
     parser.add_argument('--dataset', type=list, default=['origa', 'refuge', 'drishti'],
                         choices=['origa', 'refuge', 'dristhi'],
                         help='dataset name (default: pascal)')
-    parser.add_argument('--source1_dataset', type=str, default='/storage/zwang/datasets/origa/split_ORIGA/',
+    parser.add_argument('--source1_dataset', type=str, default='/storage/shreya/datasets/origa/split_ORIGA/',
                         help='dataset name (default: pascal)')
-    parser.add_argument('--source2_dataset', type=str, default='/storage/zwang/datasets/refuge/split_refuge/',
+    parser.add_argument('--source2_dataset', type=str, default='/storage/shreya/datasets/refuge/split_refuge/',
                         help='dataset name (default: pascal)')
-    parser.add_argument('--target_dataset', type=str, default='/storage/zwang/datasets/drishti/split_drishti/',
+    parser.add_argument('--target_dataset', type=str, default='/storage/shreya/datasets/drishti/split_drishti/',
                         help='dataset name (default: pascal)')
     parser.add_argument('--Lf', type=float, default=2.0, metavar='LF',
                         help='gradient penalty (default: auto)')

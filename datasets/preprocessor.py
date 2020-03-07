@@ -120,7 +120,7 @@ class Preprocessor:
                 org_msk = self.read_image(org_msk)
             elif dataset == 'all' and len(np.unique(org_msk))>3:
                 org_msk = self.read_image(org_msk)
-            #print(file_name, list(np.unique(org_msk)))
+            # print(file_name, list(np.unique(org_msk)))
             assert list(np.unique(org_msk)) == [0.0, 128.0, 255.0]
             org_msk = cv2.resize(org_msk, (self.resize, self.resize), interpolation =cv2.INTER_NEAREST)
             org_msk = self.center_crop(org_msk, self.crop, 2)
