@@ -150,7 +150,11 @@ def main():
     parser.add_argument('--k_targ', type=int, default=1,
                         help='skip validation during training')
     # checking point
+<<<<<<< Updated upstream:trainer_dual_source/source_only.py
     parser.add_argument('--resume', type=str, default= None, #'best_origa/m-adda_wgan_clip_0.03v_9.8.pth.tar',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
+=======
+    parser.add_argument('--resume', type=str, default= 'best_origa/m-adda_wgan_clip_0.03v_9.8.pth.tar',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
+>>>>>>> Stashed changes:trainer_dual_source/train_source_only.py
                         help='put the path to resuming file if needed')
     parser.add_argument('--save_model', type=bool, default= 'False',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
                         help='put the path to resuming file if needed')
@@ -169,7 +173,11 @@ def main():
             'pascal': 0.007,
             'glaucoma': 0.007,
         }
+<<<<<<< Updated upstream:trainer_dual_source/source_only.py
     args.lr = 5e-5 # 5e-5 best model
+=======
+    args.lr = 1e-5 # 5e-5 best model
+>>>>>>> Stashed changes:trainer_dual_source/train_source_only.py
     torch.manual_seed(1)
     torch.cuda.manual_seed(1)
     np.random.seed(1)

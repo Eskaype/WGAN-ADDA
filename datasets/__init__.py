@@ -52,7 +52,7 @@ def make_weights_for_balanced_classes(images, nclasses):
 
 def make_data_loader(src_index, datasetpath, args, **kwargs):
         train_set = make_new_dataset(args, split='train', dataset = args.dataset[src_index], data_path=datasetpath, multi_source_type='twosource')
-        val_set = make_new_dataset(args, split='test', dataset= args.dataset[src_index], data_path=datasetpath, multi_source_type='twosource')
+        val_set = make_new_dataset(args, split='train', dataset= args.dataset[src_index], data_path=datasetpath, multi_source_type='twosource')
         test_set = make_new_dataset(args, split='test', dataset = args.dataset[src_index], data_path=datasetpath, multi_source_type='twosource')
         num_class = train_set.NUM_CLASSES
         train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=0, pin_memory= True, worker_init_fn=_init_fn, drop_last=True)

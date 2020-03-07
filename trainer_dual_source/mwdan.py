@@ -7,7 +7,7 @@ from tqdm import tqdm, trange
 from PIL import Image
 import matplotlib.pyplot as plt
 from datasets import make_data_loader
-from utils.metrics import compute_iou
+from utils.metrics import compute_iou, compute_cdr
 from utils.test_sanity import sanity_check, sanity_check_2, check_preprocess_sanity
 from trainer_dual_source.trainer_multi_source_mwdan import mwdan_trainer
 import torch
@@ -23,18 +23,18 @@ class multi_source:
         self.srcb_train_loader,self.srcb_val_loader, self.srcb_test_loader, self.nclass = make_data_loader(1, args.source2_dataset, args, **kwargs)
         self.tgt_train_loader, self.tgt_val_loader, self.tgt_test_loader, self.nclass = make_data_loader(2, args.target_dataset, args, **kwargs)
         self.tbar = tqdm(self.tgt_val_loader, desc='\r')
-        self.best_IoU = {'disc': 0.77, 'cup': 0.65, 'mode': 'maxmin'}
+        self.best_metrics = {'disc': 0.77, 'cup': 0.65,  'delta_cdr': 1.0}
         self.mwdan_trainer = mwdan_trainer(args, self.num_class, self.num_domains)
 
     def loop_iterable(self, iterable):
         while True:
             yield from iterable
 
-    def save_model(self, epoch, iou_disc, iou_cup, timestampLaunch, save_dir='multi_wgan_clip_0.03'):
+    def save_model(self, epoch, iou_disc, iou_cup, delta_cdr, timestampLaunch, save_dir='multi_wgan_clip_0.03'):
         print('---- MODEL SAVE ---')
         if os.path.isdir(save_dir):
             os.mkdir(save_dir)
-        torch.save({'epoch': epoch + 1, 'state_dict': self.mwdan_trainer.generator_model.state_dict(), 'iou_disc': str(iou_disc), 'iou_cup': str(iou_cup), 'optimizer' : self.mwdan_trainer.model_optim.state_dict()}, 'multi_wgan_clip/{}_{}_{}_{}.pth.tar'.format(timestampLaunch, iou_disc, iou_cup, epoch))
+        torch.save({'epoch': epoch + 1, 'state_dict': self.mwdan_trainer.generator_model.state_dict(), 'iou_disc': str(iou_disc), 'iou_cup': str(iou_cup), 'delta_cdr': str(delta_cdr), 'optimizer' : self.mwdan_trainer.model_optim.state_dict()}, 'multi_wgan_clip/{}_{}_{}_{}.pth.tar'.format(timestampLaunch, iou_disc, iou_cup, delta_cdr, epoch))
         return
 
     def train_mwdan(self, args):
@@ -43,7 +43,7 @@ class multi_source:
         timestampDate = time.strftime("%d%m%Y")
         timestampLaunch = timestampDate + '-' + timestampTime
         for epoch in range(args.epochs):
-            # self.validation(args, epoch)
+            self.validation(args, timestampLaunch, epoch)
             self.mwdan_trainer.generator_model.train()
             self.mwdan_trainer.discriminator_model.train()
             total_loss = 0
@@ -107,19 +107,23 @@ class multi_source:
         #evaluator.Plot_Loss(1)
         print('Validation on total  set of size {}'.format(len(target_disc)))
         #print('[Epoch: %d, numImages: %5d]' % (epoch, i * args.batch_size + image.data.shape[0]))
-        iou_cup = compute_iou(target_cup, predict_cup)
-        iou_disc = compute_iou(target_disc, predict_disc)
-        cdr_pred = compute_cdr(predict_cup, predict_disc)
-        cdr_gt = compute_cdr(target_cup, target_disc)
-        print("for Epoch {} iou disc:{} and iou_cup:{}".format(epoch , iou_disc, iou_cup))
-        if iou_cup > self.best_IoU['cup'] or iou_disc > self.best_IoU['disc']:
-            if iou_cup > self.best_IoU['cup']:
-                self.best_IoU['cup'] = iou_cup
-            if iou_disc > self.best_IoU['disc']:
-                self.best_IoU['disc'] = iou_disc
+        iou_cup, dic_cup = compute_iou(target_cup, predict_cup)
+        iou_disc, dic_disc = compute_iou(target_disc, predict_disc)
+        try:
+            delta_cdr = compute_cdr(predict_cup, predict_disc, target_cup, target_disc)
+        except Exception:
+            delta_cdr = 10
+        print("for Epoch {} iou disc:{} and iou_cup:{} and delta_cdr:{}".format(epoch , iou_disc, iou_cup, delta_cdr))
+        if iou_cup > self.best_metrics['cup'] or iou_disc > self.best_metrics['disc'] or delta_cdr < self.best_metrics['delta_cdr'] :
+            if iou_cup > self.best_metrics['cup']:
+                self.best_metrics['cup'] = iou_cup
+            if iou_disc > self.best_metrics['disc']:
+                self.best_metrics['disc'] = iou_disc
+            if delta_cdr < self.best_metrics['delta_cdr']:
+                self.best_metrics['delta_cdr'] = delta_cdr
 
             print("a best model saved with iou for cup {} and for disc is {} on epoch {}".format(iou_cup, iou_disc, epoch))
-            self.save_model(epoch, iou_disc, iou_cup, timestampLaunch, save_dir=args.output_dir)
+            self.save_model(epoch, iou_disc, iou_cup, delta_cdr, timestampLaunch, save_dir=args.output_dir)
 
 def main():
     parser = argparse.ArgumentParser(description="PyTorch DeeplabV3Plus Training")
@@ -152,8 +156,7 @@ def main():
     parser.add_argument('--no-cuda', action='store_true', default=
                         False, help='disables CUDA training')
 
-    parser.add_argument('--Cs', action='Cs', default=
-                        True, help='if use sample proportion prior')
+    parser.add_argument('--Cs', action='store_true', default=True, help='if use sample proportion prior')
 
     parser.add_argument('--gpu-ids', type=str, default='0',
                         help='use which gpu to train, must be a \
@@ -164,11 +167,11 @@ def main():
     parser.add_argument('--loss-type', type=str, default='bce',
                         choices=['ce', 'focal', 'bce'],
                         help='loss func type (default: ce)')
-    parser.add_argument('--lr_critic', type=int, default=1e-4,
+    parser.add_argument('--lr_critic', type=float, default=1e-4,
                         help='skip validation during training')
-    parser.add_argument('--gamma', type=int, default=0.5,
+    parser.add_argument('--gamma', type=float, default=0.1,
                         help='skip validation during training')
-    parser.add_argument('--lambda_g', type=int, default=1,
+    parser.add_argument('--lambda_g', type=float, default=1,
                         help='skip validation during training')
     parser.add_argument('--epochs', type=int, default=400, metavar='N',
                         help='number of epochs to train (default: auto)')
@@ -182,8 +185,7 @@ def main():
     # checking point
     parser.add_argument('--resume', type=str, default= "pretrained/deeplab-resnet.pth.tar", #'best_origa/m-adda_wgan_clip_0.03v_9.8.pth.tar',#'pretrained/deeplab-resnet.pth.tar',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
         help='put the path to resuming file if needed')
-    parser.add_argument('--mu', type = int, default=0.01,
-                          "balancing paramter")
+    parser.add_argument('--mu', type = float, default=0.01, help="balancing paramter")
     parser.add_argument('--output-dir', type=str, default='multi_wgan_clip_0.03', help='output path')
 
     parser.add_argument('--save_model', type=bool, default= 'False',#"m-adda_wganv_9.1.pth.tar", #"run/glaucoma/best_experiment_2.pth.tar",
@@ -203,7 +205,7 @@ def main():
             'pascal': 0.007,
             'glaucoma': 0.007,
         }
-    args.lr = 5e-5 # 5e-5 best model
+    args.lr = 1e-4 # 5e-5 best model
     torch.manual_seed(1)
     torch.cuda.manual_seed(1)
     np.random.seed(1)
