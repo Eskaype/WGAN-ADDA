@@ -9,31 +9,27 @@ class Tune:
         self.TuneComb = []
 
     def create_param(self,
-        gamma=0.2,
-        mu=0.1,
+        beta=0.0001,
         weight_decay=1e-5,
-        Lf=2,
-        lr=1e-3,
-        lr_critic=1e-4,
+        num_update = 1,
+        lr=1e-4,
+        bs = 4,
         backbone='resnet'):
         param = dict()
-        param['gamma']=gamma
-        param['mu']=mu
         param['weight_decay']=weight_decay
-        param['Lf']=Lf
         param['lr']=lr
-        param['lr_critic']=lr_critic
-        param['backbone']=backbone
+        param['beta'] = beta
+        param['num_update'] = num_update
+        param['batch_size'] = bs
+        param['backbone'] = backbone
         self.TuneComb.append(param)
 
     def create_population(self,
-        Lgamma=[0.2,0.5],
-        Lmu=[0.08,0.2],
+        Lbeta = [1e-5, 1e-4, 1e-3],
         Lweight_decay=[1e-4],
-        LLf=[1,2,5,10,50,100],
-        Llr=[1e-4, 1e-5],
-        Llr_critic=[1e-4, 1e-5],
-        beta = [1e-4, 1e-3],
+        Lupdate=[1,2,5],
+        Llr=[1e-4, 5e-5, 1e-5],
+        Lbs = [4,8],
         Lbackbone=['resnet']
         ):
         """
@@ -47,16 +43,16 @@ class Tune:
         Current:
         In this stage we directly give combinations
         """
-        allarg = [Lgamma, Lmu,  Lweight_decay, LLf, Llr, Llr_critic, Lbackbone]
+        allarg = [Lbeta, Lweight_decay,  Lupdate, Llr, Lbs, Lbackbone]
         initials = list(itertools.product(*allarg))
         for initial in initials:
-            self.create_param(initial[0],initial[1],initial[2],initial[3],initial[4],initial[5],initial[6])
+            self.create_param(initial[0],initial[1],initial[2],initial[3],initial[4],initial[5])
 
     def create_train(self):
         cmds = []
         for param in self.TuneComb:
-            output_dir = "multi_default/"+'doutput_mu:{}_gamma:{}_wd:{}_Lf:{}_lr:{}_{}'.format(param['mu'], param['gamma'], param['weight_decay'], param['Lf'], param['lr'], param['lr_critic'])
-            cmd = "CUDA_VISIBLE_DEVICES='1' python3 trainer_dual_source/mwdan.py --gamma={} --mu={} --weight-decay={} --Lf={} --lr={} --lr_critic={} --output-dir={} --backbone={}".format(param['gamma'], param['mu'], param['weight_decay'], param['Lf'], param['lr'], param['lr_critic'], output_dir, param['backbone'])
+            output_dir = "multi_default/"+'doutput_beta:{}_wd:{}_nup:{}_lr:{}_bs:{}'.format(param['beta'], param['weight_decay'], param['num_update'], param['lr'], param['batch_size'])
+            cmd = "CUDA_VISIBLE_DEVICES='1' python3 trainer_dual_source/source_only.py --beta={} --weight-decay={} --meta_update_step={} --lr={}  --batch_size={} --output-dir={}  --backbone={}".format(param['beta'], param['weight_decay'], param['num_update'], param['lr'], param['batch_size'], output_dir, param['backbone'])
             cmds.append(cmd)
         return cmds
 

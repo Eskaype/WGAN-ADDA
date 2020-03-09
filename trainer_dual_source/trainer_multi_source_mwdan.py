@@ -113,8 +113,6 @@ class mwdan_trainer(object):
         # compute gradient penalty
         penalty = self.init_wasserstein.gradient_regularization_multi_source(self.discriminator_model,source_feature.detach(), target_feature.detach(), options['batch_size'], options['num_domains'],
             options['Lf'])
-        penalty_0, penalty_1 = self.init_wasserstein.gradient_regularization_multi_source(self.discriminator_model,source_feature.detach(), target_feature.detach(), options['batch_size'], options['num_domains'],
-            options['Lf'])
         if options['mode']== "maxmin":
             # src_index x (B x H x W)
             # domain_losses_0 = self.init_wasserstein.update_wasserstein_singlesource( [Xs[0]], Y, torch.Tensor(Cs).cuda())
@@ -124,9 +122,10 @@ class mwdan_trainer(object):
             # loss = torch.max(loss1,loss2)
             domain_losses_0 = self.init_wasserstein.update_single_wasserstein(Xs[0], Y).cuda()
             domain_losses_1 = self.init_wasserstein.update_single_wasserstein(Xs[1], Y).cuda()
-            penalty_0 = self.init_wasserstein.update_
-            domain_losses = self.init_wasserstein.update_wasserstein_multi_source
-            torch.max()
+            penalty_0 = self.init_wasserstein.gradient_regularization_single_source(self.discriminator_model, Xs[0], Y, batch_size))
+            penalty_1 = self.init_wasserstein.gradient_regularization_single_source(self.discriminator_model, Xs[1], Y, batch_size))
+            domain_losses = torch.min(domain_losses_0, domain_losses_1)
+            loss = torch.max(losses[0], losses[1]) - domain_losses
 
         elif options['mode'] == "dynamic":
             # TODO Wasserstein not implemented yet for this
@@ -135,7 +134,8 @@ class mwdan_trainer(object):
             import pdb
             pdb.set_trace()
             domain_losses = self.init_wasserstein.update_wasserstein_multi_source(Xs, Y, torch.Tensor(Cs).cuda())
-            loss = torch.mean(losses) - options['mu'] * (torch.mean(domain_losses) + options['gamma'] * penalty)
+            penalty = self.init_wasserstein.
+            loss = torch.mean(losses) - options['mu'] * (domain_losses + options['gamma'] * penalty)
         else:
             raise ValueError("No support for the training mode on madnNet: {}.".format(options['mode']))
         loss.backward()

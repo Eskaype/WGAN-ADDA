@@ -18,7 +18,7 @@ class make_new_dataset:
         split_path = {'train': 'train_shuffled_data.txt', 'test': 'test_shuffled_data.txt', 'combined': 'all_shuffled_data.txt'}
         self.dataset = dataset
         self.source = read_dataset(split_path[split], data_path, MASK_PATHS[dataset], dataset)
-        self.preprocessor = Preprocessor(prep_method=['transform_image'], resize= 450, crop=(400,400), options={'norm':[[0.485, 0.456, 0.406], [0.229, 0.224, 0.225]]})
+        self.preprocessor = Preprocessor(prep_method=['transform_image'], resize= 512, crop=(400,400), options={'norm':[[0.485, 0.456, 0.406], [0.229, 0.224, 0.225]]})
         # if dataset == 'drishti':
         #     import pdb
         #     pdb.set_trace()

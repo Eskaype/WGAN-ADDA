@@ -113,7 +113,10 @@ class Wasserstein(object):
         alpha = torch.rand(h_s.size(0),1).cuda()
         target = h_t
         alpha = alpha.expand(source.size(0), int(source.nelement()/source.size(0))).contiguous().view(source.size(0), source.size(1), source.size(2), source.size(3))
-        return
+        interpolate = torch.autograd.Variable((alpha*source + (1-alpha)*target), requires_grad=True)
+        pred = critic(interpolate)
+        penalty = self.gradient_penalty(pred, interpolate, 1, batch_size)
+        return penalty
 
     def gradient_regularization_dual_source_baycentric(self, critic, h_s, h_t, batch_size, num_source):
         alpha1, alpha2, alpha3 = self.dirichlet_number_generator(batch_size * num_source)

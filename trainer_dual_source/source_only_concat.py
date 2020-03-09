@@ -30,7 +30,7 @@ class multi_source:
         meta_update_lr = args.lr
         meta_update_step = args.meta_update_step
         beta = args.beta
-        self.mwdan_trainer = multisource_metatrainer(args, self.num_class, meta_update_lr, meta_update_step, beta)
+        self.mwdan_trainer = multisource_metatrainer(args, self.num_class, meta_update_lr, meta_update_step, beta, 'default')
 
     def loop_iterable(self, iterable):
         while True:
@@ -78,7 +78,7 @@ class multi_source:
                     print('batch wise loss {} at batch {}'.format(total_loss/(step+1), step+1))
             print("total epoch loss {}".format(total_loss/(step+1)))
             self.validation(args, timestampLaunch, epoch)
-            if self.early_stop==True:
+            if self.early_stop == True:
                 return
         return
 
