@@ -109,8 +109,11 @@ class Wasserstein(object):
         #penalties = torch.cat(penalties)
         return penalties[0], penalties[1]
 
-
-
+    def gradient_regularization_single_source(self, ciritc, h_s, h_t, batch_size):
+        alpha = torch.rand(h_s.size(0),1).cuda()
+        target = h_t
+        alpha = alpha.expand(source.size(0), int(source.nelement()/source.size(0))).contiguous().view(source.size(0), source.size(1), source.size(2), source.size(3))
+        return
 
     def gradient_regularization_dual_source_baycentric(self, critic, h_s, h_t, batch_size, num_source):
         alpha1, alpha2, alpha3 = self.dirichlet_number_generator(batch_size * num_source)

@@ -111,20 +111,30 @@ class mwdan_trainer(object):
         Y = disc_clf[self.num_domains*self.batch_size:self.num_domains * self.batch_size+self.batch_size].squeeze()
         # Different final loss function depending on different training modes.
         # compute gradient penalty
+        penalty = self.init_wasserstein.gradient_regularization_multi_source(self.discriminator_model,source_feature.detach(), target_feature.detach(), options['batch_size'], options['num_domains'],
+            options['Lf'])
         penalty_0, penalty_1 = self.init_wasserstein.gradient_regularization_multi_source(self.discriminator_model,source_feature.detach(), target_feature.detach(), options['batch_size'], options['num_domains'],
             options['Lf'])
         if options['mode']== "maxmin":
             # src_index x (B x H x W)
-            domain_losses_0 = self.init_wasserstein.update_wasserstein_multi_source( [Xs[0]], Y, torch.Tensor(Cs).cuda())
-            domain_losses_1 = self.init_wasserstein.update_wasserstein_multi_source( [Xs[1]], Y, torch.Tensor(Cs).cuda())
-            loss1= torch.mean(losses[0]) - options['mu'] * (domain_losses_0 + options['gamma'] * torch.mean(penalty_0))
-            loss2= torch.mean(losses[1]) - options['mu'] * (domain_losses_1 + options['gamma'] * torch.mean(penalty_1))
-            loss = torch.max(loss1,loss2)
+            # domain_losses_0 = self.init_wasserstein.update_wasserstein_singlesource( [Xs[0]], Y, torch.Tensor(Cs).cuda())
+            # domain_losses_1 = self.init_wasserstein.update_wasserstein_single_source( [Xs[1]], Y, torch.Tensor(Cs).cuda())
+            # loss1= torch.mean(losses[0]) - options['mu'] * (domain_losses_0 + options['gamma'] * torch.mean(penalty_0))
+            # loss2= torch.mean(losses[1]) - options['mu'] * (domain_losses_1 + options['gamma'] * torch.mean(penalty_1))
+            # loss = torch.max(loss1,loss2)
+            domain_losses_0 = self.init_wasserstein.update_single_wasserstein(Xs[0], Y).cuda()
+            domain_losses_1 = self.init_wasserstein.update_single_wasserstein(Xs[1], Y).cuda()
+            penalty_0 = self.init_wasserstein.update_
+            domain_losses = self.init_wasserstein.update_wasserstein_multi_source
+            torch.max()
 
         elif options['mode'] == "dynamic":
             # TODO Wasserstein not implemented yet for this
             loss = torch.log(torch.sum(torch.exp(options['gamma'] * (losses + options['mu'] * domain_losses)))) / options['gamma']
         elif options['mode'] == 'default':
+            import pdb
+            pdb.set_trace()
+            domain_losses = self.init_wasserstein.update_wasserstein_multi_source(Xs, Y, torch.Tensor(Cs).cuda())
             loss = torch.mean(losses) - options['mu'] * (torch.mean(domain_losses) + options['gamma'] * penalty)
         else:
             raise ValueError("No support for the training mode on madnNet: {}.".format(options['mode']))

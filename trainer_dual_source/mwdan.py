@@ -24,17 +24,18 @@ class multi_source:
         self.tgt_train_loader, self.tgt_val_loader, self.tgt_test_loader, self.nclass = make_data_loader(2, args.target_dataset, args, **kwargs)
         self.tbar = tqdm(self.tgt_val_loader, desc='\r')
         self.best_metrics = {'disc': 0.77, 'cup': 0.65,  'delta_cdr': 1.0}
+        self.hyper_dict = args.hyparams_dict
         self.mwdan_trainer = mwdan_trainer(args, self.num_class, self.num_domains)
 
     def loop_iterable(self, iterable):
         while True:
             yield from iterable
 
-    def save_model(self, epoch, iou_disc, iou_cup, delta_cdr, timestampLaunch, save_dir='multi_wgan_clip_0.03'):
+    def save_model(self, epoch, iou_disc, iou_cup, delta_cdr, timestampLaunch, hyper_dict, save_dir='multi_wgan_clip_0.03'):
         print('---- MODEL SAVE ---')
-        if os.path.isdir(save_dir):
+        if not os.path.isdir(save_dir):
             os.mkdir(save_dir)
-        torch.save({'epoch': epoch + 1, 'state_dict': self.mwdan_trainer.generator_model.state_dict(), 'iou_disc': str(iou_disc), 'iou_cup': str(iou_cup), 'delta_cdr': str(delta_cdr), 'optimizer' : self.mwdan_trainer.model_optim.state_dict()}, 'multi_wgan_clip/{}_{}_{}_{}.pth.tar'.format(timestampLaunch, iou_disc, iou_cup, delta_cdr, epoch))
+        torch.save({'epoch': epoch + 1, 'state_dict': self.mwdan_trainer.generator_model.state_dict(), 'iou_disc': str(iou_disc), 'iou_cup': str(iou_cup), 'delta_cdr': str(delta_cdr), 'optimizer' : self.mwdan_trainer.model_optim.state_dict(), 'hyperparam_dict': hyper_dict}, '{}/{}_{}_{}_{}.pth.tar'.format(save_dir, timestampLaunch, iou_disc, iou_cup, delta_cdr, epoch))
         return
 
     def train_mwdan(self, args):
@@ -52,7 +53,7 @@ class multi_source:
             batch_iterator_target = enumerate(self.tgt_train_loader)
             torch.manual_seed(1 + epoch)
             len_dataloader = max(max(len(self.srca_train_loader), len(self.srcb_train_loader)), len(self.tgt_train_loader))
-            options = {'gamma': args.gamma , 'mu': args.mu, 'mode': 'maxmin', 'batch_size': args.batch_size, 'num_domains': 2, 'Lf': args.Lf}
+            options = {'gamma': args.gamma , 'mu': args.mu, 'mode': 'default', 'batch_size': args.batch_size, 'num_domains': 2, 'Lf': args.Lf}
             if args.Cs:
                 Cs = np.array([len(self.srca_train_loader), len(self.srcb_train_loader)])
             else:
@@ -78,7 +79,7 @@ class multi_source:
                 if step % 50 ==0:
                     print('batch wise loss {} at batch {}'.format(total_loss/(step+1), step+1))
             print("total epoch loss {}".format(total_loss/(step+1)))
-            self.validation(args, timestampLaunch, epoch)
+            self.validation(args, timestampLaunch, epoch, Cs)
         return
 
     def validation(self, args, timestampLaunch, epoch):
@@ -123,7 +124,7 @@ class multi_source:
                 self.best_metrics['delta_cdr'] = delta_cdr
 
             print("a best model saved with iou for cup {} and for disc is {} on epoch {}".format(iou_cup, iou_disc, epoch))
-            self.save_model(epoch, iou_disc, iou_cup, delta_cdr, timestampLaunch, save_dir=args.output_dir)
+            self.save_model(epoch, iou_disc, iou_cup, delta_cdr, timestampLaunch, args.hyparams_dict, save_dir=args.output_dir)
 
 def main():
     parser = argparse.ArgumentParser(description="PyTorch DeeplabV3Plus Training")
@@ -205,7 +206,8 @@ def main():
             'pascal': 0.007,
             'glaucoma': 0.007,
         }
-    args.lr = 1e-4 # 5e-5 best model
+    #args.lr = 1e-4 # 5e-5 best model
+    args.hyparams_dict = {'lr_critic': args.lr_critic , 'lr_gen': args.lr ,'Lf': args.Lf , 'gamma': args.gamma ,'mu': args.mu, 'k_disc': args.k_disc, 'k_src': args.k_src}
     torch.manual_seed(1)
     torch.cuda.manual_seed(1)
     np.random.seed(1)

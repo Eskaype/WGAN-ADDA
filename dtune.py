@@ -54,7 +54,7 @@ class Tune:
     def create_train(self):
         cmds = []
         for param in self.TuneComb:
-            output_dir = 'doutput_mu:{}_gamma:{}_wd:{}_Lf:{}_lr:{}_{}'.format(param['mu'], param['gamma'], param['weight_decay'], param['Lf'], param['lr'], param['lr_critic'])
+            output_dir = "multi_default/"+'doutput_mu:{}_gamma:{}_wd:{}_Lf:{}_lr:{}_{}'.format(param['mu'], param['gamma'], param['weight_decay'], param['Lf'], param['lr'], param['lr_critic'])
             cmd = "CUDA_VISIBLE_DEVICES='1' python3 trainer_dual_source/mwdan.py --gamma={} --mu={} --weight-decay={} --Lf={} --lr={} --lr_critic={} --output-dir={} --backbone={}".format(param['gamma'], param['mu'], param['weight_decay'], param['Lf'], param['lr'], param['lr_critic'], output_dir, param['backbone'])
             cmds.append(cmd)
         return cmds
