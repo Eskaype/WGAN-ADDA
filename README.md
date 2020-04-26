@@ -4,7 +4,7 @@ This repository implements the `WGAN Domain Adaptation` model for single  source
 
 The overall model architecture is as shown in the figure:
 
-![WGAN Model][segmentation_pipeline.pdf]
+![WGAN Model](segmentation_pipeline.pdf)
 
 [WGAN Model]: (segmentation_pipeline.pdf) "Model architecture"
 
