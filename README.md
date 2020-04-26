@@ -6,7 +6,7 @@ The overall model architecture is as shown in the figure:
 
 ![WGAN Model](segmentation_pipeline.pdf)
 
-[WGAN Model]: (segmentation_pipeline.pdf) "Model architecture"
+[WGAN Model]: https://github.com/Eskaype/WGAN-ADDA/blob/master/segmentation_pipeline.pdf "Model architecture"
 
 
 The code in this repository implements the following features:
