@@ -1,6 +1,6 @@
 ## Domain Adaptation on Medical Images
 
-This repository implements the `WGAN Domain Adaptation' model for single  source and target in *pytorch* framework
+This repository implements the `WGAN Domain Adaptation` model for single  source and target in *pytorch* framework
 
 The overall model architecture is as shown in the figure:
 
