@@ -6,7 +6,7 @@ The overall model architecture is as shown in the figure:
 
 ![][WGAN Model]
 
-[WGAN Model]: img/Architecture "WGAN Model"
+[WGAN Model]: segmentation_pipeline.pdf "Model architecture"
 
 
 The code in this repository implements the following features:
